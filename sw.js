@@ -1,6 +1,6 @@
 // CourtStats PRO - service worker
 // PARA PUBLICAR UNA ACTUALIZACIÓN: cambiá VERSION (v1 -> v2 -> v3...) y subí los archivos.
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CORE = 'courtstats-core-' + VERSION;
 const LIBS = 'courtstats-libs-v1'; // librerías con versión fija; cambiar el nombre solo si cambian sus URLs
 const CORE_FILES = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png'];
