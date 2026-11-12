@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1e293b">
+<meta name="description" content="Estadísticas de básquet en vivo: mapa de tiro, box score, equipos y partidos guardados.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="CourtStats">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>CourtStats PRO - Basketball Analytics</title>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+<style>
+  body{touch-action:manipulation;user-select:none;-webkit-user-select:none}
+  input{user-select:text;-webkit-user-select:text}
+  .shot-marker{transform:translate(-50%,-50%)}
+  body{padding-bottom:env(safe-area-inset-bottom)}
+</style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans antialiased">
+
+<header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-30 shadow-lg">
+  <div class="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div>
+        <span id="my-label" onclick="editTeamName('us')" title="Tocá para cambiar el nombre" class="text-xs uppercase font-bold text-indigo-400 block tracking-wider truncate max-w-[90px] cursor-pointer">Mi Equipo</span>
+        <span id="score-us" class="text-3xl font-extrabold">0</span>
+      </div>
+      <div class="flex flex-col gap-1">
+        <span class="text-[10px] text-slate-400 font-semibold">T.M. Restantes</span>
+        <div class="flex gap-1 min-h-[12px]" id="tm-us-dots"></div>
+        <button onclick="useTimeOut('us')" class="text-[10px] bg-indigo-900/60 hover:bg-indigo-800 text-indigo-200 px-1.5 py-0.5 rounded border border-indigo-700">Pedir T.M.</button>
+      </div>
+    </div>
+    <div class="flex flex-col items-center">
+      <div class="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-700" id="q-btns"></div>
+      <span id="half-indicator" class="text-[10px] text-indigo-300 font-medium mt-1"></span>
+    </div>
+    <div class="flex items-center gap-3">
+      <div class="flex flex-col gap-1 items-end">
+        <span class="text-[10px] text-slate-400 font-semibold">T.M. Restantes</span>
+        <div class="flex gap-1 min-h-[12px]" id="tm-them-dots"></div>
+        <button onclick="useTimeOut('them')" class="text-[10px] bg-rose-900/60 hover:bg-rose-800 text-rose-200 px-1.5 py-0.5 rounded border border-rose-700">Pedir T.M.</button>
+      </div>
+      <div class="text-right">
+        <span id="rival-label" onclick="editTeamName('them')" title="Tocá para cambiar el nombre" class="text-xs uppercase font-bold text-rose-400 block tracking-wider truncate max-w-[90px] cursor-pointer">Rival</span>
+        <span id="score-them" class="text-3xl font-extrabold">0</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<nav class="bg-slate-800/80 border-b border-slate-700 flex sm:justify-center overflow-x-auto px-1 gap-1 sm:gap-4 text-sm font-semibold py-1 z-20" id="tabs"></nav>
+
+<main class="flex-1 max-w-7xl w-full mx-auto p-2 sm:p-4 flex flex-col gap-4">
+
+  <!-- CANCHA -->
+  <div id="tab-court" class="flex flex-col lg:flex-row gap-4 flex-1">
+    <div class="flex-1 bg-slate-800 rounded-xl border border-slate-700 p-3 flex flex-col items-center shadow-xl">
+      <div class="w-full flex flex-wrap justify-between items-center mb-2 gap-1">
+        <span class="text-xs font-bold text-slate-300 uppercase"><i class="fa-solid fa-hand-pointer text-indigo-400 mr-1"></i> Elegí jugador y tocá la cancha</span>
+        <div class="flex items-center gap-2">
+          <button onclick="openRosterModal()" class="text-xs bg-slate-700 hover:bg-slate-600 px-2.5 py-1 rounded border border-slate-500"><i class="fa-solid fa-pen-to-square text-indigo-400"></i> Plantilla</button>
+          <button onclick="undoLastAction()" class="text-xs bg-slate-700 hover:bg-slate-600 text-amber-400 px-2.5 py-1 rounded border border-slate-500"><i class="fa-solid fa-rotate-left"></i> Deshacer</button>
+        </div>
+      </div>
+      <div class="grid grid-cols-[5.25rem_1fr] sm:grid-cols-[7.5rem_1fr_7.5rem] gap-2 w-full max-w-4xl items-start"><div class="flex flex-col gap-1.5" id="oncourt-panel"></div><div class="relative flex-1 min-w-0 bg-slate-900 border-2 border-slate-600 rounded-lg overflow-hidden cursor-crosshair" style="aspect-ratio:500/470" id="court-container" onclick="handleCourtClick(event)">
+        <svg viewBox="0 0 500 470" class="w-full h-full stroke-slate-400 fill-none" stroke-width="2">
+          <rect x="5" y="5" width="490" height="460" stroke-width="3"/>
+          <line x1="220" y1="20" x2="280" y2="20" stroke-width="4" stroke="#e2e8f0"/>
+          <circle cx="250" cy="32" r="9" class="stroke-orange-500" stroke-width="3"/>
+          <rect x="170" y="5" width="160" height="190"/>
+          <path d="M 220,5 A 30,30 0 0,0 280,5" stroke-dasharray="4"/>
+          <circle cx="250" cy="190" r="60"/>
+          <path d="M 30,5 L 30,90 A 220,220 0 0,0 470,90 L 470,5" stroke-width="2.5" class="stroke-indigo-400"/>
+        </svg>
+        <div id="shot-markers-layer" class="absolute inset-0 pointer-events-none"></div>
+      </div>
+      <div class="col-span-2 sm:col-span-1 flex flex-row sm:flex-col gap-1.5" id="roncourt-panel"></div></div><div class="w-full flex justify-between items-center text-xs text-slate-400 mt-2">
+        <div class="flex items-center gap-3">
+          <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span> Convertido</span>
+          <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-rose-500 inline-block"></span> Fallado</span><span class="text-slate-500">● nuestro · ■ rival</span>
+        </div>
+        <div class="flex gap-1"><button onclick="toggleTeamView()" class="bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded border border-slate-500"><strong id="filter-team-label" class="text-rose-300"></strong></button><button onclick="toggleView()" class="bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded border border-slate-500"><strong id="filter-court-label" class="text-indigo-300"></strong></button></div>
+      </div>
+    </div>
+
+    <div class="w-full lg:w-80 flex flex-col gap-4">
+      <button onclick="openTO()" class="w-full bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white font-extrabold text-lg py-4 rounded-xl shadow-xl flex items-center justify-center gap-3"><i class="fa-solid fa-triangle-exclamation text-xl"></i> PÉRDIDA</button>
+      <div class="bg-slate-800 rounded-xl border border-slate-700 p-3 shadow-xl">
+        <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider mb-1"><i class="fa-solid fa-bullseye text-amber-400"></i> Tiros libres sueltos</h3>
+        <p class="text-[11px] text-slate-400 mb-2">Para jugadas con falta y sin tiro de campo. Se asignan al jugador seleccionado a los costados de la cancha.</p>
+        <div class="grid grid-cols-2 gap-2">
+      <div class="bg-slate-900/80 p-2 rounded border border-slate-700">
+        <span class="text-[10px] font-bold text-indigo-300 block text-center uppercase">Nuestros</span>
+        <span id="ft-hint-us" class="text-[10px] text-slate-400 block text-center truncate mb-1.5"></span>
+        <span class="text-[10px] text-slate-400 block font-semibold">Por jugada</span>
+        <div class="flex gap-1 mb-1.5"><button onclick="addFT('us','shooting',true)" class="flex-1 bg-emerald-600 hover:bg-emerald-500 font-bold text-xs py-1.5 rounded">+1</button><button onclick="addFT('us','shooting',false)" class="flex-1 bg-rose-600 hover:bg-rose-500 font-bold text-xs py-1.5 rounded">Falló</button></div>
+        <span class="text-[10px] text-slate-400 block font-semibold">Por bonus</span>
+        <div class="flex gap-1"><button onclick="addFT('us','bonus',true)" class="flex-1 bg-emerald-600 hover:bg-emerald-500 font-bold text-xs py-1.5 rounded">+1</button><button onclick="addFT('us','bonus',false)" class="flex-1 bg-rose-600 hover:bg-rose-500 font-bold text-xs py-1.5 rounded">Falló</button></div>
+      </div>
+      <div class="bg-slate-900/80 p-2 rounded border border-slate-700">
+        <span class="text-[10px] font-bold text-rose-300 block text-center uppercase">Rival</span>
+        <span id="ft-hint-them" class="text-[10px] text-slate-400 block text-center truncate mb-1.5"></span>
+        <span class="text-[10px] text-slate-400 block font-semibold">Por jugada</span>
+        <div class="flex gap-1 mb-1.5"><button onclick="addFT('them','shooting',true)" class="flex-1 bg-emerald-600 hover:bg-emerald-500 font-bold text-xs py-1.5 rounded">+1</button><button onclick="addFT('them','shooting',false)" class="flex-1 bg-rose-600 hover:bg-rose-500 font-bold text-xs py-1.5 rounded">Falló</button></div>
+        <span class="text-[10px] text-slate-400 block font-semibold">Por bonus</span>
+        <div class="flex gap-1"><button onclick="addFT('them','bonus',true)" class="flex-1 bg-emerald-600 hover:bg-emerald-500 font-bold text-xs py-1.5 rounded">+1</button><button onclick="addFT('them','bonus',false)" class="flex-1 bg-rose-600 hover:bg-rose-500 font-bold text-xs py-1.5 rounded">Falló</button></div>
+      </div>
+        </div>
+      </div>
+      <div class="bg-slate-800 rounded-xl border border-slate-700 p-3 shadow-xl">
+        <h3 class="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2 truncate"><i class="fa-solid fa-chart-simple"></i> <span id="my-phase-title">Eficiencia Ofensiva</span></h3>
+        <div class="space-y-2 text-xs" id="phase-stats"></div>
+      </div>
+      <div class="bg-slate-800 rounded-xl border border-slate-700 p-3 shadow-xl flex-1 flex flex-col justify-between">
+        <div>
+        <h3 class="text-xs font-bold text-rose-400 uppercase tracking-wider mb-2 truncate"><i class="fa-solid fa-chart-simple"></i> <span id="rphase-title">Ofensiva Rival</span></h3>
+        <div class="space-y-2 text-xs" id="rphase-stats"></div>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-700">
+          <div class="grid grid-cols-2 gap-2"><button onclick="exportXLSX(S)" class="bg-emerald-600 hover:bg-emerald-500 font-bold py-2 px-2 rounded-lg text-xs"><i class="fa-solid fa-file-excel text-base"></i> Excel</button><button onclick="exportPDF(S)" class="bg-rose-600 hover:bg-rose-500 font-bold py-2 px-2 rounded-lg text-xs"><i class="fa-solid fa-file-pdf text-base"></i> PDF</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ANALÍTICA -->
+  <div id="tab-analytics" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-xl">
+      <h3 class="text-sm font-bold mb-3"><i class="fa-solid fa-chart-bar text-indigo-400"></i> PPI por Fase: Nosotros vs Rival</h3>
+      <div class="h-64"><canvas id="chart-phases"></canvas></div>
+    </div>
+    <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-xl">
+      <h3 class="text-sm font-bold mb-3"><i class="fa-solid fa-chart-line text-emerald-400"></i> eFG% por Cuarto</h3>
+      <div class="h-64"><canvas id="chart-quarters"></canvas></div>
+    </div>
+    <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-xl md:col-span-2">
+      <h3 class="text-sm font-bold mb-3"><i class="fa-solid fa-triangle-exclamation text-orange-400"></i> Pérdidas por situación</h3>
+      <div id="to-stats" class="space-y-1.5 text-xs"></div>
+    </div>
+    <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-xl md:col-span-2">
+      <h3 class="text-sm font-bold mb-3"><i class="fa-solid fa-bullseye text-amber-400"></i> Tiros libres: por jugada vs bonus</h3>
+      <div id="ft-stats" class="overflow-x-auto"></div>
+    </div>
+  </div>
+
+  <!-- HISTORIAL -->
+  <div id="tab-history" class="hidden bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-xl">
+    <h3 class="text-sm font-bold mb-3"><i class="fa-solid fa-clock-rotate-left text-indigo-400"></i> Registro Evento por Evento</h3>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs text-slate-300">
+        <thead class="bg-slate-900/80 text-slate-400 uppercase font-semibold">
+          <tr><th class="p-2">Cuarto</th><th class="p-2">Equipo</th><th class="p-2">Jugador</th><th class="p-2">Detalle</th><th class="p-2">Fase</th><th class="p-2">Resultado</th><th class="p-2 text-right">Acción</th></tr>
+        </thead>
+        <tbody id="history-table-body" class="divide-y divide-slate-700"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- BOX SCORE -->
+  <div id="tab-box" class="hidden flex flex-col gap-4"></div>
+
+  <!-- EQUIPOS -->
+  <div id="tab-teams" class="hidden flex flex-col gap-4"></div>
+
+  <!-- PARTIDOS -->
+  <div id="tab-games" class="hidden flex flex-col gap-4">
+    <div class="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-xl">
+      <h3 class="text-sm font-bold mb-3"><i class="fa-solid fa-floppy-disk text-indigo-400"></i> Partido actual</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+        <input id="inp-my" oninput="S.myTeam=this.value;updateUI(true)" placeholder="Mi equipo" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">
+        <input id="inp-opp" oninput="S.opp=this.value;updateUI(true)" placeholder="Nombre del rival" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">
+        <input id="inp-date" type="date" oninput="S.date=this.value" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+        <label class="text-[11px] text-slate-400">Mi equipo (de Equipos)<select id="sel-my" onchange="applyTeam('us', this.value)" class="w-full mt-1 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200"></select></label>
+        <label class="text-[11px] text-slate-400">Rival (de Equipos)<select id="sel-opp" onchange="applyTeam('them', this.value)" class="w-full mt-1 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200"></select></label>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button onclick="saveGame()" class="bg-indigo-600 hover:bg-indigo-500 font-bold text-xs px-4 py-2 rounded-lg"><i class="fa-solid fa-floppy-disk"></i> Guardar partido</button>
+        <button onclick="newGame()" class="bg-slate-700 hover:bg-slate-600 font-bold text-xs px-4 py-2 rounded-lg"><i class="fa-solid fa-plus"></i> Nuevo partido</button>
+        <button onclick="clearAllData()" class="bg-rose-900/50 hover:bg-rose-800 text-rose-200 text-xs px-3 py-2 rounded-lg border border-rose-700">Limpiar eventos</button>
+      </div>
+      <p id="save-status" class="text-[11px] text-slate-400 mt-2"></p>
+    </div>
+    <div class="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-xl">
+      <h3 class="text-sm font-bold mb-3"><i class="fa-solid fa-box-archive text-emerald-400"></i> Partidos guardados</h3>
+      <div id="games-list" class="space-y-2"></div>
+    </div>
+    <div class="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-xl">
+      <h3 class="text-sm font-bold mb-1"><i class="fa-solid fa-shield-halved text-emerald-400"></i> Respaldo de datos</h3>
+      <p class="text-[11px] text-slate-400 mb-3">Guarda todos tus partidos, equipos y jugadores en un archivo. Al importar se suma lo que falte, sin borrar nada.</p>
+      <div class="flex flex-wrap gap-2">
+        <button onclick="exportBackup()" class="bg-emerald-600 hover:bg-emerald-500 font-bold text-xs px-4 py-2 rounded-lg"><i class="fa-solid fa-download"></i> Exportar respaldo</button>
+        <button id="btn-share" onclick="shareBackup()" class="hidden bg-slate-700 hover:bg-slate-600 font-bold text-xs px-4 py-2 rounded-lg"><i class="fa-solid fa-share-nodes"></i> Compartir respaldo</button>
+        <button onclick="$('inp-import').click()" class="bg-slate-700 hover:bg-slate-600 font-bold text-xs px-4 py-2 rounded-lg"><i class="fa-solid fa-upload"></i> Importar respaldo</button>
+        <button id="btn-install" onclick="installApp()" class="hidden bg-indigo-600 hover:bg-indigo-500 font-bold text-xs px-4 py-2 rounded-lg"><i class="fa-solid fa-mobile-screen"></i> Instalar app</button>
+        <input id="inp-import" type="file" accept=".json,application/json" class="hidden" onchange="importBackup(this)">
+      </div>
+      <p id="backup-info" class="text-[11px] text-slate-400 mt-2"></p>
+      <p class="text-[11px] text-slate-500 mt-1">CourtStats PRO v<span id="app-version"></span></p>
+    </div>
+  </div>
+</main>
+
+<!-- AVISO DE ACTUALIZACIÓN -->
+<div id="update-banner" class="hidden fixed bottom-3 left-3 right-3 z-[60] bg-indigo-700 border border-indigo-300 rounded-xl p-3 shadow-2xl flex items-center justify-between gap-3 text-sm">
+  <span>Hay una versión nueva de la app.</span>
+  <button onclick="applyUpdate()" class="bg-white text-indigo-800 font-bold text-xs px-3 py-1.5 rounded-lg shrink-0">Actualizar</button>
+</div>
+
+<!-- MODAL TIRO -->
+<div id="shot-modal" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-3 hidden">
+  <div class="bg-slate-800 border border-slate-600 rounded-xl max-w-md w-full p-4 shadow-2xl space-y-4">
+    <div class="flex justify-between items-center border-b border-slate-700 pb-2">
+      <h3 class="text-sm font-bold"><i class="fa-solid fa-bullseye text-indigo-400"></i> Registrar Tiro</h3>
+      <button onclick="closeShotModal()" class="text-slate-400 hover:text-white text-lg font-bold">&times;</button>
+    </div>
+    <div>
+      <label class="block text-xs font-semibold text-slate-300 mb-1">Jugador:</label>
+      <div id="modal-player" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm font-bold text-indigo-300"></div>
+    </div>
+    <div>
+      <label class="block text-xs font-semibold text-slate-300 mb-1">Resultado — <span id="modal-zone"></span></label>
+      <div class="grid grid-cols-2 gap-2" id="shot-result-options"></div>
+    </div>
+    <div>
+      <label class="block text-xs font-semibold text-slate-300 mb-1">Momento de la Ofensiva:</label>
+      <div class="grid grid-cols-2 gap-2" id="phase-options"></div>
+    </div>
+    <div class="border-t border-slate-700 pt-2">
+      <label class="block text-xs font-semibold text-slate-300 mb-1">Tiros Libres por Falta Recibida:</label>
+      <div class="flex gap-2">
+        <button onclick="addFTToShot(true)" class="flex-1 bg-emerald-900/60 hover:bg-emerald-800 border border-emerald-600 text-emerald-200 text-xs py-1.5 rounded font-bold">+1 TL Anotado</button>
+        <button onclick="addFTToShot(false)" class="flex-1 bg-rose-900/60 hover:bg-rose-800 border border-rose-600 text-rose-200 text-xs py-1.5 rounded font-bold">+1 TL Fallado</button>
+        <button onclick="addFTToShot(null)" class="bg-slate-700 hover:bg-slate-600 text-xs px-2 rounded" title="Reiniciar TL">↺</button>
+      </div>
+      <div id="modal-ft-summary" class="text-[11px] text-indigo-300 mt-1 font-semibold text-center"></div>
+    </div>
+    <div class="flex gap-2 pt-2">
+      <button onclick="closeShotModal()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold py-2 rounded-lg">Cancelar</button>
+      <button onclick="confirmShotRegistration()" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-xs font-bold py-2 rounded-lg">Guardar Tiro</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PÉRDIDA -->
+<div id="to-modal" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-3 hidden">
+  <div class="bg-slate-800 border border-slate-600 rounded-xl max-w-md w-full p-4 shadow-2xl space-y-3">
+    <div class="flex justify-between items-center border-b border-slate-700 pb-2">
+      <h3 class="text-sm font-bold"><i class="fa-solid fa-triangle-exclamation text-orange-400"></i> Pérdida: ¿cómo fue?</h3>
+      <button onclick="closeTO()" class="text-slate-400 hover:text-white text-lg font-bold">&times;</button>
+    </div>
+    <div><label class="block text-xs font-semibold text-slate-300 mb-1">Jugador:</label><div id="to-players" class="grid grid-cols-3 gap-1.5"></div></div>
+    <div><label class="block text-xs font-semibold text-slate-300 mb-1">Situación:</label><div id="to-options" class="grid grid-cols-2 gap-2"></div></div>
+  </div>
+</div>
+
+<!-- MODAL CAMBIOS -->
+<div id="sub-modal" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-3 hidden">
+  <div class="bg-slate-800 border border-slate-600 rounded-xl max-w-lg w-full p-4 shadow-2xl space-y-3 max-h-[90vh] flex flex-col">
+    <div class="flex justify-between items-center border-b border-slate-700 pb-2">
+      <h3 class="text-sm font-bold"><i class="fa-solid fa-right-left text-amber-400"></i> Jugadores en cancha</h3>
+      <span id="sub-count" class="text-xs text-indigo-300 font-semibold"></span>
+    </div>
+    <div id="sub-list" class="grid grid-cols-2 gap-2 overflow-y-auto flex-1"></div>
+    <div class="pt-2 border-t border-slate-700 flex gap-2">
+      <button onclick="closeSubModal(false)" class="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold py-2 rounded-lg">Cancelar</button>
+      <button onclick="closeSubModal(true)" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-xs font-bold py-2 rounded-lg">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PLANTILLA -->
+<div id="roster-modal" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-3 hidden">
+  <div class="bg-slate-800 border border-slate-600 rounded-xl max-w-lg w-full p-4 shadow-2xl space-y-3 max-h-[90vh] flex flex-col">
+    <div class="flex justify-between items-center border-b border-slate-700 pb-2">
+      <h3 class="text-sm font-bold"><i class="fa-solid fa-users text-indigo-400"></i> Plantilla</h3>
+      <button onclick="closeRosterModal()" class="text-slate-400 hover:text-white text-lg font-bold">&times;</button>
+    </div>
+    <div class="flex gap-2" id="roster-team-btns"></div><div class="overflow-y-auto flex-1 space-y-2 pr-1" id="roster-inputs-container"></div>
+    <div class="pt-2 border-t border-slate-700 flex justify-end">
+      <button onclick="closeRosterModal()" class="bg-indigo-600 hover:bg-indigo-500 text-xs font-bold px-4 py-2 rounded-lg">Guardar Cambios</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const LS_CUR = 'courtstats_current', LS_GAMES = 'courtstats_games';
+const PHASES = ['Fast Break', 'Early Set', 'Late Clock', '2nd Chance'];
+const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4', 'OT'];
+const MAX_TM = { H1: 2, H2: 3, OT: 1 };
+const half = q => q === 'OT' ? 'OT' : (q === 'Q1' || q === 'Q2') ? 'H1' : 'H2';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => Date.now() + Math.random();
+const today = () => new Date().toISOString().slice(0, 10);
+
+function lsGet(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }
+
+const defaultPlayers = () => Array.from({ length: 12 }, (_, i) => ({ id: i + 1, number: String(i + 4), name: `Jugador ${i + 4}` }));
+const defaultRPlayers = () => Array.from({ length: 12 }, (_, i) => ({ id: i + 1, number: String(i + 4), name: `Rival ${i + 4}` }));
+const tn = (e, st) => e.team === 'Mi Equipo' ? (st.myTeam || 'Mi Equipo') : (st.opp || 'Rival');
+const freshState = (players) => { const pl = players || defaultPlayers(); return { quarter: 'Q1', players: pl, onCourt: pl.slice(0, 5).map(p => p.id), selected: null, rivalPhase: 'Early Set', myTeam: '', rPlayers: defaultRPlayers(), rOnCourt: [1, 2, 3, 4, 5], rSelected: null, myTeamId: null, oppTeamId: null, events: [], gameId: null, opp: '', date: today() }; };
+
+let S = Object.assign(freshState(), lsGet(LS_CUR, {}));
+let games = lsGet(LS_GAMES, []);
+const LS_TEAMS = 'courtstats_teams';
+let teams = lsGet(LS_TEAMS, []);
+let tv = { team: null, player: null, phase: '' };
+const saveTeams = () => lsSet(LS_TEAMS, teams);
+const TURNOVERS = ['Robo Rival', 'Pérdida No Forzada', 'P&R', 'Fast Break', 'Camina', 'Foul Ofensivo', '24"'];
+let tempShot = null, viewAll = false, currentTab = 'court', phaseChart = null, quarterChart = null;
+
+// ---------- Marcador y tiempos muertos (derivados de los eventos) ----------
+function scores(st) {
+  let us = 0, them = 0;
+  st.events.forEach(e => {
+    if (e.type === 'SHOT') { if (e.isMade) us += e.points; us += e.ftMade || 0; }
+    else if (e.type === 'RIVAL_FT' && e.isMade) them += 1;
+    else if (e.type === 'FT' && e.isMade) us += 1;
+    else if (e.type === 'RIVAL_FG') them += (e.isMade ? e.points : 0) + (e.ftMade || 0);
+  });
+  return { us, them };
+}
+function remainingTM(team, q) {
+  const used = S.events.filter(e => e.type === 'TIMEOUT' && e.teamKey === team && half(e.quarter) === half(q)).length;
+  return Math.max(0, MAX_TM[half(q)] - used);
+}
+function useTimeOut(team) {
+  if (remainingTM(team, S.quarter) <= 0) { alert('No quedan Tiempos Muertos en este período.'); return; }
+  S.events.push({ id: uid(), quarter: S.quarter, team: team === 'us' ? 'Mi Equipo' : 'Rival', teamKey: team, type: 'TIMEOUT', description: 'Tiempo Muerto' });
+  updateUI();
+}
+
+// ---------- Cuartos y pestañas ----------
+function setQuarter(q) { S.quarter = q; updateUI(); }
+function renderQuarterBtns() {
+  $('q-btns').innerHTML = QUARTERS.map(q => `<button onclick="setQuarter('${q}')" class="px-2 py-1 text-xs font-bold rounded ${q === S.quarter ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}">${q}</button>`).join('');
+  const h = half(S.quarter);
+  $('half-indicator').innerText = h === 'H1' ? '1° Tiempo (2 T.M.)' : h === 'H2' ? '2° Tiempo (3 T.M.)' : 'Prórroga (1 T.M.)';
+}
+const TABS = [['court', 'fa-basketball', 'Cancha'], ['analytics', 'fa-chart-pie', 'Analítica'], ['history', 'fa-list-ol', 'Historial'], ['box', 'fa-table', 'Box Score'], ['teams', 'fa-people-group', 'Equipos'], ['games', 'fa-floppy-disk', 'Partidos']];
+function switchTab(t) {
+  currentTab = t;
+  TABS.forEach(([id]) => $('tab-' + id).classList.toggle('hidden', id !== t));
+  $('tabs').innerHTML = TABS.map(([id, ic, label]) => `<button onclick="switchTab('${id}')" class="whitespace-nowrap shrink-0 px-2.5 sm:px-4 py-1.5 rounded-md flex items-center gap-2 ${id === t ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white'}"><i class="fa-solid ${ic}"></i> ${label}${id === 'history' ? ` (${S.events.length})` : ''}</button>`).join('');
+  if (t === 'games') renderGames();
+  if (t === 'box') renderBox();
+  if (t === 'teams') renderTeams();
+}
+
+// ---------- Plantilla ----------
+let rosterTeam = 'us', subSel = [], subTeam = 'us';
+const rosterList = t => t === 'us' ? S.players : S.rPlayers;
+function editTeamName(t) {
+  const cur = t === 'us' ? S.myTeam : S.opp, v = prompt('Nombre del equipo:', cur || (t === 'us' ? 'Mi Equipo' : 'Rival'));
+  if (v === null) return;
+  if (t === 'us') S.myTeam = v.trim(); else S.opp = v.trim();
+  updateUI();
+}
+function renderRosterInputs() {
+  $('roster-team-btns').innerHTML = [['us', S.myTeam || 'Mi Equipo'], ['them', S.opp || 'Rival']].map(([t, n]) => `<button onclick="setRosterTeam('${t}')" class="flex-1 text-xs font-bold py-1.5 rounded border truncate px-2 ${t === rosterTeam ? 'bg-indigo-600 border-indigo-300' : 'bg-slate-900 border-slate-600 text-slate-400'}">${esc(n)}</button>`).join('');
+  $('roster-inputs-container').innerHTML = rosterList(rosterTeam).map((p, i) => `
+    <div class="flex items-center gap-2 bg-slate-900/80 p-2 rounded border border-slate-700">
+      <span class="text-xs text-slate-400 w-6">#${i + 1}</span>
+      <input type="text" value="${esc(p.number)}" onchange="updatePlayer(${i},'number',this.value)" class="w-16 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs font-bold text-indigo-300 text-center">
+      <input type="text" value="${esc(p.name)}" onchange="updatePlayer(${i},'name',this.value)" class="flex-1 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs">
+    </div>`).join('');
+}
+function setRosterTeam(t) { rosterTeam = t; renderRosterInputs(); }
+function updatePlayer(i, f, v) {
+  const q = rosterList(rosterTeam)[i]; q[f] = v;
+  if (q.pid) { const tid = rosterTeam === 'us' ? S.myTeamId : S.oppTeamId, t = teams.find(x => x.id === tid), tp = t && t.players.find(x => x.id === q.pid); if (tp) { tp[f] = v; saveTeams(); } }
+  renderOnCourt(); autosave(true);
+}
+function populatePlayerSelect() { renderOnCourt(); }
+const playerPts = (id, t) => S.events.reduce((a, e) => {
+  if (e.playerId !== id) return a;
+  if (e.type === (t === 'us' ? 'SHOT' : 'RIVAL_FG')) return a + (e.isMade ? e.points : 0) + (e.ftMade || 0);
+  if (e.type === (t === 'us' ? 'FT' : 'RIVAL_FT')) return a + (e.isMade ? 1 : 0);
+  return a;
+}, 0);
+function panelHTML(t) {
+  const us = t === 'us', list = us ? S.players : S.rPlayers, on = us ? S.onCourt : S.rOnCourt, selId = us ? S.selected : S.rSelected;
+  const c = us ? ['bg-indigo-600 border-indigo-300', 'hover:border-indigo-400', 'text-indigo-100', 'text-indigo-300', 'text-indigo-400'] : ['bg-rose-600 border-rose-300', 'hover:border-rose-400', 'text-rose-100', 'text-rose-300', 'text-rose-400'];
+  return `<span class="hidden sm:block text-[10px] font-bold uppercase ${c[4]} text-center truncate">${esc(us ? (S.myTeam || 'Mi Equipo') : (S.opp || 'Rival'))}</span>` +
+    on.map(id => {
+      const p = list.find(x => x.id === id); if (!p) return '';
+      const sel = selId === id;
+      return `<button onclick="${us ? 'selectPlayer' : 'selectRPlayer'}(${id})" class="flex-1 sm:flex-none min-w-0 rounded-lg border p-1.5 text-left ${sel ? c[0] + ' text-white' : 'bg-slate-900 border-slate-600 ' + c[1]}"><span class="block text-base font-extrabold leading-none">#${esc(p.number)}</span><span class="block text-[10px] truncate ${sel ? c[2] : 'text-slate-400'}">${esc(p.name)}</span><span class="block text-[10px] font-semibold ${sel ? 'text-white' : c[3]}">${playerPts(id, t)} pts</span></button>`;
+    }).join('') +
+    `<button onclick="openSubModal('${t}')" class="flex-1 sm:flex-none text-xs bg-slate-700 hover:bg-slate-600 border border-slate-500 rounded-lg py-1.5"><i class="fa-solid fa-right-left text-amber-400"></i><span class="hidden sm:inline"> Cambios</span></button>`;
+}
+function renderOnCourt() {
+  $('oncourt-panel').innerHTML = panelHTML('us'); $('roncourt-panel').innerHTML = panelHTML('them');
+  const hint = (id, list, t) => { const p = id && list.find(x => x.id === id); $('ft-hint-' + t).innerText = p ? `#${p.number} ${p.name}` : 'Sin jugador asignado'; };
+  hint(S.selected, S.players, 'us'); hint(S.rSelected, S.rPlayers, 'them');
+}
+function selectPlayer(id) { S.selected = S.selected === id ? null : id; if (S.selected) S.rSelected = null; renderOnCourt(); autosave(true); }
+function selectRPlayer(id) { S.rSelected = S.rSelected === id ? null : id; if (S.rSelected) S.selected = null; renderOnCourt(); autosave(true); }
+function openSubModal(t) { subTeam = t; subSel = [...(t === 'us' ? S.onCourt : S.rOnCourt)]; renderSub(); $('sub-modal').classList.remove('hidden'); }
+function renderSub() {
+  $('sub-count').innerText = `${subSel.length}/5 seleccionados`;
+  $('sub-list').innerHTML = rosterList(subTeam).map(p => `<button onclick="toggleSub(${p.id})" class="p-2 rounded border text-xs text-left ${subSel.includes(p.id) ? 'bg-indigo-600 border-indigo-300 text-white' : 'bg-slate-900 border-slate-700'}"><b>#${esc(p.number)}</b> ${esc(p.name)}</button>`).join('');
+}
+function toggleSub(id) { subSel = subSel.includes(id) ? subSel.filter(x => x !== id) : subSel.length < 5 ? [...subSel, id] : subSel; renderSub(); }
+function closeSubModal(ok) {
+  if (ok) {
+    if (subSel.length !== 5) { alert('Elegí exactamente 5 jugadores.'); return; }
+    if (subTeam === 'us') { S.onCourt = [...subSel]; if (!S.onCourt.includes(S.selected)) S.selected = null; }
+    else { S.rOnCourt = [...subSel]; if (!S.rOnCourt.includes(S.rSelected)) S.rSelected = null; }
+    updateUI();
+  }
+  $('sub-modal').classList.add('hidden');
+}
+function openRosterModal() { renderRosterInputs(); $('roster-modal').classList.remove('hidden'); }
+function closeRosterModal() { $('roster-modal').classList.add('hidden'); updateUI(); }
+
+// ---------- Registro de tiro ----------
+function handleCourtClick(ev) {
+  const team = S.selected ? 'us' : S.rSelected ? 'them' : null;
+  if (!team) { alert('Primero elegí el jugador que tiró (botones a los costados de la cancha).'); return; }
+  const r = $('court-container').getBoundingClientRect();
+  const x = (ev.clientX - r.left) / r.width * 100, y = (ev.clientY - r.top) / r.height * 100;
+  // Coordenadas en unidades del SVG (500x470); la línea de 3 coincide con la dibujada
+  const sx = x * 5, sy = y * 4.7;
+  const is3 = sy <= 90 ? (sx < 30 || sx > 470) : Math.hypot(sx - 250, sy - 90) > 220;
+  tempShot = { team, x: x.toFixed(1), y: y.toFixed(1), result: is3 ? 'MADE_3' : 'MADE_2', points: is3 ? 3 : 2, zone: is3 ? 3 : 2, isMade: true, phase: team === 'them' ? (S.rivalPhase || 'Early Set') : 'Early Set', ftMade: 0, ftMissed: 0 };
+  populatePlayerSelect();
+  renderShotModal();
+  $('shot-modal').classList.remove('hidden');
+}
+function renderShotModal() {
+  const p = tempShot.team === 'us' ? S.players.find(x => x.id === S.selected) : S.rPlayers.find(x => x.id === S.rSelected);
+  $('modal-player').innerText = p ? `${tempShot.team === 'us' ? (S.myTeam || 'Mi Equipo') : (S.opp || 'Rival')} · #${p.number} - ${p.name}` : '';
+  $('modal-zone').innerHTML = `<span class="text-indigo-300">tiro de ${tempShot.zone} puntos</span> <button type="button" onclick="flipZone()" class="underline text-slate-400">cambiar a ${tempShot.zone === 3 ? 2 : 3}</button>`;
+  selectShotResult((tempShot.isMade ? 'MADE_' : 'MISS_') + tempShot.zone); selectPhase(tempShot.phase); updateModalFT();
+}
+function flipZone() { tempShot.zone = tempShot.zone === 3 ? 2 : 3; renderShotModal(); }
+function selectShotResult(res) {
+  tempShot.result = res; tempShot.isMade = res.startsWith('MADE'); tempShot.points = res.endsWith('3') ? 3 : 2;
+  const v = tempShot.zone, opts = [['MADE_' + v, 'ANOTADO (+' + v + ')', 'emerald'], ['MISS_' + v, 'FALLADO (' + v + ' pts)', 'rose']];
+  $('shot-result-options').innerHTML = opts.map(([id, l, c]) => `<button type="button" onclick="selectShotResult('${id}')" class="p-2.5 rounded-lg border bg-slate-900 text-xs font-bold ${id === res ? 'border-indigo-500 bg-indigo-950' : 'border-slate-700'}"><span class="text-${c}-400">${l}</span></button>`).join('');
+}
+function selectPhase(ph) {
+  tempShot.phase = ph;
+  $('phase-options').innerHTML = PHASES.map(p => `<button type="button" onclick="selectPhase('${p}')" class="p-2 rounded border text-xs font-medium ${p === ph ? 'border-indigo-500 bg-indigo-900 text-white' : 'border-slate-700 bg-slate-900'}">${p}</button>`).join('');
+}
+function addFTToShot(made) {
+  if (made === null) { tempShot.ftMade = 0; tempShot.ftMissed = 0; }
+  else if (made) tempShot.ftMade++; else tempShot.ftMissed++;
+  updateModalFT();
+}
+function updateModalFT() { $('modal-ft-summary').innerText = `TLs de la jugada: ${tempShot.ftMade} anotados / ${tempShot.ftMissed} fallados`; }
+function confirmShotRegistration() {
+  const them = tempShot.team === 'them';
+  const p = them ? (S.rPlayers.find(p => p.id === S.rSelected) || S.rPlayers[0]) : (S.players.find(p => p.id === S.selected) || S.players[0]);
+  S.events.push({ id: uid(), quarter: S.quarter, team: them ? 'Rival' : 'Mi Equipo', type: them ? 'RIVAL_FG' : 'SHOT', playerId: p.id, playerPid: p.pid, playerNumber: p.number, playerName: p.name,
+    x: tempShot.x, y: tempShot.y, points: tempShot.points, isMade: tempShot.isMade, phase: tempShot.phase, ftMade: tempShot.ftMade, ftMissed: tempShot.ftMissed });
+  closeShotModal(); updateUI();
+}
+function closeShotModal() { $('shot-modal').classList.add('hidden'); tempShot = null; }
+
+// ---------- Rival ----------
+
+function undoLastAction() { if (S.events.length) { S.events.pop(); updateUI(); } }
+function deleteEvent(id) { S.events = S.events.filter(e => e.id !== id); updateUI(); }
+function clearAllData() { if (confirm('¿Borrar todos los eventos del partido actual?')) { S.events = []; updateUI(); } }
+function toggleView() { viewAll = !viewAll; renderMarkers(); }
+
+// ---------- Render ----------
+let viewTeam = 'all';
+function toggleTeamView() { viewTeam = viewTeam === 'all' ? 'us' : viewTeam === 'us' ? 'them' : 'all'; renderMarkers(); }
+function renderMarkers() {
+  $('filter-court-label').innerText = viewAll ? 'Todos los cuartos' : S.quarter;
+  $('filter-team-label').innerText = viewTeam === 'all' ? 'Ambos equipos' : viewTeam === 'us' ? (S.myTeam || 'Mi Equipo') : (S.opp || 'Rival');
+  $('shot-markers-layer').innerHTML = S.events.filter(e => (e.type === 'SHOT' || (e.type === 'RIVAL_FG' && e.x !== undefined))
+    && (viewAll || e.quarter === S.quarter) && (viewTeam === 'all' || (viewTeam === 'us') === (e.type === 'SHOT'))).map(s =>
+    `<div class="shot-marker absolute ${s.type === 'SHOT' ? 'rounded-full' : 'rounded-md'} flex items-center justify-center text-[9px] font-bold text-white shadow-md border ${s.isMade ? 'bg-emerald-500 border-emerald-300 w-6 h-6' : 'bg-rose-500 border-rose-300 w-5 h-5 opacity-80'}" style="left:${s.x}%;top:${s.y}%">${esc(s.playerNumber)}</div>`).join('');
+}
+function phaseRows(type) {
+  return PHASES.map(ph => {
+    const sh = S.events.filter(e => e.type === type && e.phase === ph), m = sh.filter(e => e.isMade).length;
+    const pts = sh.reduce((a, e) => a + (e.isMade ? e.points : 0), 0);
+    return `<div class="bg-slate-900/60 p-2 rounded flex justify-between items-center"><span>${ph}</span><span class="text-right"><span class="font-bold ${type === 'SHOT' ? 'text-indigo-300' : 'text-rose-300'}">${sh.length ? String(+(pts / sh.length).toFixed(2)).replace('.', ',') : '0'} PPI</span> <span class="text-slate-400">(${m}/${sh.length})</span></span></div>`;
+  }).join('');
+}
+function renderPhaseStats() {
+  $('phase-stats').innerHTML = phaseRows('SHOT'); $('rphase-stats').innerHTML = phaseRows('RIVAL_FG');
+  $('my-phase-title').innerText = 'Ofensiva · ' + (S.myTeam || 'Mi Equipo'); $('rphase-title').innerText = 'Ofensiva · ' + (S.opp || 'Rival');
+}
+function renderHistory() {
+  $('history-table-body').innerHTML = S.events.slice().reverse().map(e => {
+    let d = '';
+    if (e.type === 'SHOT') d = `${e.points}pt ${e.isMade ? 'Anotado' : 'Fallado'}${e.ftMade || e.ftMissed ? ` (TL ${e.ftMade}/${e.ftMade + e.ftMissed})` : ''}`;
+    else if (e.type === 'RIVAL_FT' || e.type === 'FT') d = `Tiro libre (${e.origin === 'bonus' ? 'Bonus' : 'Por jugada'})`;
+    else if (e.type === 'RIVAL_FG') d = `Tiro de campo ${e.points}pt ${e.isMade ? 'anotado' : 'fallado'}${e.ftMade || e.ftMissed ? ` (TL ${e.ftMade}/${e.ftMade + e.ftMissed})` : ''}`;
+    else if (e.type === 'TURNOVER') d = 'Pérdida: ' + esc(e.situation);
+    else d = e.description || '';
+    const res = e.isMade === undefined ? '-' : e.isMade ? 'Acierto' : 'Fallo';
+    return `<tr class="hover:bg-slate-700/50"><td class="p-2 font-bold text-indigo-400">${e.quarter}</td><td class="p-2 font-semibold">${esc(tn(e, S))}</td>
+      <td class="p-2">${e.playerName ? `#${esc(e.playerNumber)} ${esc(e.playerName)}` : '-'}</td><td class="p-2">${d}</td><td class="p-2 text-slate-400">${e.phase || '-'}</td>
+      <td class="p-2 font-bold ${e.isMade ? 'text-emerald-400' : e.isMade === false ? 'text-rose-400' : ''}">${res}</td>
+      <td class="p-2 text-right"><button onclick="deleteEvent(${e.id})" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-trash"></i></button></td></tr>`;
+  }).join('') || '<tr><td colspan="7" class="p-4 text-center text-slate-500">No hay eventos registrados.</td></tr>';
+}
+// ---------- Box score ----------
+const emptyAgg = () => ({ pts: 0, fgp: 0, fgm: 0, fga: 0, m2: 0, a2: 0, m3: 0, a3: 0, ftm: 0, fta: 0, to: 0, n: 0 });
+function addEv(a, e) {
+  a.n++;
+  if (e.type === 'TURNOVER') { a.to++; return; }
+  if (e.type === 'RIVAL_FT' || e.type === 'FT') { a.fta++; if (e.isMade) { a.ftm++; a.pts++; } return; }
+  a.fga++; if (e.points === 3) a.a3++; else a.a2++;
+  if (e.isMade) { a.fgm++; a.fgp += e.points; a.pts += e.points; if (e.points === 3) a.m3++; else a.m2++; }
+  const fm = e.ftMade || 0; a.ftm += fm; a.fta += fm + (e.ftMissed || 0); a.pts += fm;
+}
+const addAgg = (t, a) => Object.keys(t).forEach(k => t[k] += a[k]);
+const ppiF = (p, a) => a ? String(+(p / a).toFixed(2)).replace('.', ',') : '-';
+const efgF = a => a.fga ? String(Math.round((a.fgm + 0.5 * a.m3) / a.fga * 1000) / 10).replace('.', ',') + '%' : '-';
+function boxRow(num, name, a, cls, showTO) {
+  return `<tr class="${cls || 'hover:bg-slate-700/50'}"><td class="p-2 font-bold text-indigo-300 whitespace-nowrap">${num}</td><td class="p-2 whitespace-nowrap">${name}</td><td class="p-2 text-right font-extrabold">${a.pts}</td>
+    <td class="p-2 text-right whitespace-nowrap">${a.fgm}/${a.fga}</td><td class="p-2 text-right text-slate-400">${a.fga ? Math.round(a.fgm / a.fga * 100) + '%' : '-'}</td>
+    <td class="p-2 text-right whitespace-nowrap">${a.m2}/${a.a2}</td><td class="p-2 text-right whitespace-nowrap">${a.m3}/${a.a3}</td><td class="p-2 text-right whitespace-nowrap">${a.ftm}/${a.fta}</td>
+    <td class="p-2 text-right font-semibold text-indigo-300">${ppiF(a.fgp, a.fga)}</td><td class="p-2 text-right">${showTO ? a.to : '-'}</td></tr>`;
+}
+function boxTable(t) {
+  const us = t === 'us', list = us ? S.players : S.rPlayers;
+  const evs = S.events.filter(e => us ? (e.type === 'SHOT' || e.type === 'TURNOVER' || e.type === 'FT') : (e.type === 'RIVAL_FG' || e.type === 'RIVAL_FT'));
+  const tot = emptyAgg(), rows = [];
+  list.forEach(p => {
+    const a = emptyAgg(); evs.filter(e => e.playerId === p.id).forEach(e => addEv(a, e));
+    if (a.n) { addAgg(tot, a); rows.push(boxRow('#' + esc(p.number), esc(p.name), a, '', us)); }
+  });
+  const ua = emptyAgg(); evs.filter(e => e.playerId == null).forEach(e => addEv(ua, e));
+  if (ua.n) { addAgg(tot, ua); rows.push(boxRow('—', '<span class="text-slate-400 italic">Sin jugador asignado</span>', ua, '', us)); }
+  const name = esc(us ? (S.myTeam || 'Mi Equipo') : (S.opp || 'Rival'));
+  return `<div class="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-xl">
+    <h3 class="text-sm font-bold mb-3 ${us ? 'text-indigo-400' : 'text-rose-400'} uppercase tracking-wide">${name}</h3>
+    <div class="overflow-x-auto"><table class="w-full text-left text-xs text-slate-300">
+      <thead class="bg-slate-900/80 text-slate-400 uppercase font-semibold"><tr><th class="p-2">#</th><th class="p-2">Jugador</th><th class="p-2 text-right">PTS</th><th class="p-2 text-right">TC</th><th class="p-2 text-right">TC%</th><th class="p-2 text-right">2P</th><th class="p-2 text-right">3P</th><th class="p-2 text-right">TL</th><th class="p-2 text-right">PPI</th><th class="p-2 text-right">PÉR</th></tr></thead>
+      <tbody class="divide-y divide-slate-700">${rows.join('') || '<tr><td colspan="10" class="p-4 text-center text-slate-500">Sin registros todavía.</td></tr>'}</tbody>
+      <tfoot>${boxRow('', '<b>TOTAL</b>', tot, 'bg-slate-900/80 font-bold border-t-2 border-slate-600', us)}</tfoot>
+    </table></div></div>`;
+}
+function renderBox() {
+  const sc = scores(S);
+  $('tab-box').innerHTML = `<div class="text-center text-sm font-bold bg-slate-800 rounded-xl border border-slate-700 py-2"><span class="text-indigo-300">${esc(S.myTeam || 'Mi Equipo')}</span> <span class="text-xl mx-2">${sc.us} - ${sc.them}</span> <span class="text-rose-300">${esc(S.opp || 'Rival')}</span></div>`
+    + boxTable('us') + boxTable('them')
+    + '<p class="text-[11px] text-slate-500">TC: tiros de campo · PPI: puntos de tiros de campo por intento · PÉR: pérdidas (solo se registran las de tu equipo) · PTS incluye los tiros libres de cada jugada.</p>';
+}
+
+// ---------- Tiros libres sueltos ----------
+function addFT(side, origin, isMade) {
+  const us = side === 'us', id = us ? S.selected : S.rSelected, p = id ? (us ? S.players : S.rPlayers).find(x => x.id === id) : null;
+  S.events.push({ id: uid(), quarter: S.quarter, team: us ? 'Mi Equipo' : 'Rival', type: us ? 'FT' : 'RIVAL_FT', origin, isMade,
+    playerId: p ? p.id : null, playerPid: p ? p.pid : undefined, playerNumber: p ? p.number : undefined, playerName: p ? p.name : undefined });
+  updateUI();
+}
+function ftAgg(us, evs = S.events) {
+  const o = { play: { m: 0, a: 0 }, bonus: { m: 0, a: 0 } };
+  evs.forEach(e => {
+    if (e.type === (us ? 'SHOT' : 'RIVAL_FG')) { o.play.m += e.ftMade || 0; o.play.a += (e.ftMade || 0) + (e.ftMissed || 0); }
+    else if (e.type === (us ? 'FT' : 'RIVAL_FT')) { const k = e.origin === 'bonus' ? o.bonus : o.play; k.a++; if (e.isMade) k.m++; }
+  });
+  return o;
+}
+function renderFTStats() {
+  const cell = k => `${k.m}/${k.a}`, pct = (m, a) => a ? Math.round(m / a * 100) + '%' : '-';
+  const row = (name, o, cls) => `<tr><td class="p-2 font-bold ${cls}">${esc(name)}</td><td class="p-2 text-right">${cell(o.play)}</td><td class="p-2 text-right">${cell(o.bonus)}</td><td class="p-2 text-right font-bold">${o.play.m + o.bonus.m}/${o.play.a + o.bonus.a}</td><td class="p-2 text-right text-slate-400">${pct(o.play.m + o.bonus.m, o.play.a + o.bonus.a)}</td></tr>`;
+  $('ft-stats').innerHTML = `<table class="w-full text-xs text-slate-300"><thead class="bg-slate-900/80 text-slate-400 uppercase font-semibold"><tr><th class="p-2 text-left">Equipo</th><th class="p-2 text-right">Por jugada</th><th class="p-2 text-right">Bonus</th><th class="p-2 text-right">Total</th><th class="p-2 text-right">%</th></tr></thead><tbody class="divide-y divide-slate-700">${row(S.myTeam || 'Mi Equipo', ftAgg(true), 'text-indigo-300')}${row(S.opp || 'Rival', ftAgg(false), 'text-rose-300')}</tbody></table><p class="text-[11px] text-slate-500 mt-2">"Por jugada" incluye los tiros libres de un tiro con falta y los que cargues sueltos como "Por jugada".</p>`;
+}
+
+// ---------- Pérdidas ----------
+let toPlayer = null;
+function openTO() { toPlayer = S.selected || null; renderTO(); $('to-modal').classList.remove('hidden'); }
+function setTOPlayer(id) { toPlayer = id; renderTO(); }
+function renderTO() {
+  $('to-players').innerHTML = S.onCourt.map(id => {
+    const p = S.players.find(x => x.id === id); if (!p) return '';
+    return `<button onclick="setTOPlayer(${id})" class="p-1.5 rounded border text-xs text-left ${toPlayer === id ? 'bg-indigo-600 border-indigo-300 text-white' : 'bg-slate-900 border-slate-600'}"><b>#${esc(p.number)}</b><span class="block truncate text-[10px]">${esc(p.name)}</span></button>`;
+  }).join('') + `<button onclick="setTOPlayer(null)" class="p-1.5 rounded border text-xs ${toPlayer === null ? 'bg-slate-600 border-slate-300 text-white' : 'bg-slate-900 border-slate-600 text-slate-400'}">Equipo</button>`;
+  $('to-options').innerHTML = TURNOVERS.map((t, i) => `<button onclick="addTurnover(${i})" class="p-2.5 rounded-lg border border-amber-700 bg-amber-900/40 hover:bg-amber-800/60 text-xs font-bold text-amber-100">${esc(t)}</button>`).join('');
+}
+function addTurnover(i) {
+  const p = toPlayer ? S.players.find(x => x.id === toPlayer) : null;
+  S.events.push({ id: uid(), quarter: S.quarter, team: 'Mi Equipo', type: 'TURNOVER', situation: TURNOVERS[i], playerId: p ? p.id : null, playerPid: p ? p.pid : undefined, playerNumber: p ? p.number : undefined, playerName: p ? p.name : undefined });
+  closeTO(); updateUI();
+}
+function closeTO() { $('to-modal').classList.add('hidden'); }
+function renderTOStats() {
+  const c = TURNOVERS.map(t => S.events.filter(e => e.type === 'TURNOVER' && e.situation === t).length), tot = c.reduce((a, b) => a + b, 0), mx = Math.max(1, ...c);
+  $('to-stats').innerHTML = TURNOVERS.map((t, i) => `<div class="flex items-center gap-2"><span class="w-36 shrink-0 text-slate-300">${esc(t)}</span><div class="flex-1 bg-slate-900 rounded h-4 overflow-hidden"><div class="bg-amber-500 h-4" style="width:${c[i] / mx * 100}%"></div></div><span class="w-16 text-right font-bold">${c[i]}${tot ? ` (${Math.round(c[i] / tot * 100)}%)` : ''}</span></div>`).join('')
+    + `<p class="text-[11px] text-slate-400 pt-1">Total de pérdidas de ${esc(S.myTeam || 'Mi Equipo')}: <b>${tot}</b></p>`;
+}
+
+// ---------- Equipos ----------
+const COURT_SVG = '<svg viewBox="0 0 500 470" class="w-full h-full stroke-slate-400 fill-none" stroke-width="2"><rect x="5" y="5" width="490" height="460" stroke-width="3"/><line x1="220" y1="20" x2="280" y2="20" stroke-width="4" stroke="#e2e8f0"/><circle cx="250" cy="32" r="9" class="stroke-orange-500" stroke-width="3"/><rect x="170" y="5" width="160" height="190"/><path d="M 220,5 A 30,30 0 0,0 280,5" stroke-dasharray="4"/><circle cx="250" cy="190" r="60"/><path d="M 30,5 L 30,90 A 220,220 0 0,0 470,90 L 470,5" stroke-width="2.5" class="stroke-indigo-400"/></svg>';
+const gamesForStats = () => games.filter(g => g.id !== S.gameId).concat([S]);
+const aggOf = evs => { const a = emptyAgg(); evs.forEach(e => addEv(a, e)); return a; };
+function phaseOf(evs) {
+  return PHASES.map(ph => {
+    const sh = evs.filter(e => (e.type === 'SHOT' || e.type === 'RIVAL_FG') && e.phase === ph), m = sh.filter(e => e.isMade).length;
+    const pts = sh.reduce((x, e) => x + (e.isMade ? e.points : 0), 0);
+    return { a: sh.length, m, pts, ppi: sh.length ? pts / sh.length : 0 };
+  });
+}
+function playerStatsMap(tid) {
+  const map = {};
+  gamesForStats().forEach((g, gi) => (g.events || []).forEach(e => {
+    const side = (e.type === 'SHOT' || e.type === 'TURNOVER' || e.type === 'FT') ? 'us' : (e.type === 'RIVAL_FG' || e.type === 'RIVAL_FT') ? 'them' : null;
+    if (!side || !e.playerPid || (side === 'us' ? g.myTeamId : g.oppTeamId) !== tid) return;
+    const m = map[e.playerPid] || (map[e.playerPid] = { evs: [], games: new Set() });
+    m.evs.push(e); m.games.add(gi);
+  }));
+  return map;
+}
+const newId = pre => pre + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+function newTeam() {
+  const name = $('inp-newteam').value.trim(); if (!name) return;
+  const t = { id: newId('t'), name, players: [] }; teams.push(t); saveTeams(); tv = { team: t.id, player: null, phase: '' }; renderTeams();
+}
+function selTeam(id) { tv = { team: id, player: null, phase: '' }; renderTeams(); }
+function selPlayer(id) { tv.player = tv.player === id ? null : id; tv.phase = ''; renderTeams(); }
+function setTVPhase(ph) { tv.phase = ph; renderTeams(); }
+function renTeam(id, v) {
+  const t = teams.find(x => x.id === id); if (!t) return;
+  t.name = v.trim() || t.name; saveTeams();
+  if (S.myTeamId === id) S.myTeam = t.name; if (S.oppTeamId === id) S.opp = t.name;
+  updateUI();
+}
+function delTeam(id) {
+  if (!confirm('¿Eliminar este equipo? Sus estadísticas individuales dejarán de verse en Equipos (los partidos guardados no se borran).')) return;
+  teams = teams.filter(t => t.id !== id); saveTeams();
+  if (S.myTeamId === id) S.myTeamId = null; if (S.oppTeamId === id) S.oppTeamId = null;
+  tv = { team: null, player: null, phase: '' }; updateUI();
+}
+function addTP(tid) {
+  const t = teams.find(x => x.id === tid); if (!t) return;
+  if (t.players.length >= 15) { alert('Máximo 15 jugadores por equipo.'); return; }
+  const num = $('inp-pnum').value.trim(), name = $('inp-pname').value.trim(); if (!num && !name) return;
+  t.players.push({ id: newId('p'), number: num || String(t.players.length + 1), name: name || `Jugador ${num}` });
+  saveTeams(); renderTeams();
+}
+function updTP(tid, pid, f, v) {
+  const t = teams.find(x => x.id === tid), p = t && t.players.find(x => x.id === pid); if (!p) return;
+  p[f] = v; saveTeams();
+  [S.players, S.rPlayers].forEach(l => l.forEach(q => { if (q.pid === pid) q[f] = v; }));
+  updateUI();
+}
+function delTP(tid, pid) {
+  if (!confirm('¿Quitar este jugador del equipo?')) return;
+  const t = teams.find(x => x.id === tid); if (!t) return;
+  t.players = t.players.filter(p => p.id !== pid); saveTeams();
+  if (tv.player === pid) tv.player = null;
+  renderTeams();
+}
+function applyTeam(side, tid) {
+  const us = side === 'us', t = teams.find(x => x.id === tid);
+  if (t && t.players.length < 5) { alert('El equipo necesita al menos 5 jugadores cargados.'); renderGames(); return; }
+  if (S.events.length && !confirm('Ya hay eventos cargados: los jugadores de esos eventos no se actualizan al cambiar de equipo. ¿Continuar?')) { renderGames(); return; }
+  if (!t) { (us ? S.players : S.rPlayers).forEach(p => delete p.pid); if (us) S.myTeamId = null; else S.oppTeamId = null; updateUI(); renderGames(); return; }
+  const pl = t.players.map((p, i) => ({ id: i + 1, number: p.number, name: p.name, pid: p.id })), on = pl.slice(0, 5).map(p => p.id);
+  if (us) { S.players = pl; S.onCourt = on; S.selected = null; S.myTeamId = t.id; S.myTeam = t.name; }
+  else { S.rPlayers = pl; S.rOnCourt = on; S.rSelected = null; S.oppTeamId = t.id; S.opp = t.name; }
+  updateUI(); renderGames();
+}
+function playerDetail(t, p, evs) {
+  const a = aggOf(evs), ph = phaseOf(evs), totPts = ph.reduce((x, d) => x + d.pts, 0);
+  const shots = evs.filter(e => (e.type === 'SHOT' || e.type === 'RIVAL_FG') && e.x !== undefined && (!tv.phase || e.phase === tv.phase));
+  const chip = (v, l) => `<button onclick="setTVPhase('${v}')" class="px-2 py-1 rounded border text-[11px] ${tv.phase === v ? 'bg-indigo-600 border-indigo-300' : 'bg-slate-900 border-slate-600 text-slate-300'}">${l}</button>`;
+  const th = 'p-2 text-right';
+  return `<div class="bg-slate-800 rounded-xl border border-indigo-500/60 p-4 shadow-xl">
+    <h3 class="text-sm font-bold mb-3"><span class="text-indigo-300">#${esc(p.number)}</span> ${esc(p.name)} <span class="text-slate-400 font-normal text-xs">· ${esc(t.name)}</span></h3>
+    <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center mb-4">
+      ${[['PTS', a.pts], ['TC', `${a.fgm}/${a.fga}`], ['PPI', ppiF(a.fgp, a.fga)], ['eFG%', efgF(a)], ['TL', `${a.ftm}/${a.fta}`], ['PÉR', a.to]].map(([l, v]) => `<div class="bg-slate-900/70 rounded p-2"><div class="text-[10px] text-slate-400">${l}</div><div class="font-extrabold text-sm">${v}</div></div>`).join('')}
+    </div>
+    <div class="overflow-x-auto mb-4"><table class="w-full text-xs text-slate-300"><thead class="bg-slate-900/80 text-slate-400 uppercase font-semibold"><tr><th class="p-2 text-left">Momento</th><th class="${th}">Intentos</th><th class="${th}">Aciertos</th><th class="${th}">Puntos</th><th class="${th}">PPI</th><th class="${th}">% de sus puntos</th></tr></thead><tbody class="divide-y divide-slate-700">
+      ${ph.map((d, i) => `<tr><td class="p-2 font-semibold">${PHASES[i]}</td><td class="${th}">${d.a}</td><td class="${th}">${d.m}</td><td class="${th} font-bold">${d.pts}</td><td class="${th} text-indigo-300">${d.a ? ppiF(d.pts, d.a) : '-'}</td><td class="${th}">${totPts ? Math.round(d.pts / totPts * 100) + '%' : '-'}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="text-xs font-bold text-slate-300 mb-2">Mapa de tiro individual <span class="text-slate-400 font-normal">· ${shots.length} tiros, ${shots.filter(e => e.isMade).length} anotados</span></p>
+    <div class="flex flex-wrap gap-1 mb-2">${chip('', 'Todos')}${PHASES.map(x => chip(x, x)).join('')}</div>
+    <div class="relative w-full max-w-md mx-auto bg-slate-900 border-2 border-slate-600 rounded-lg overflow-hidden" style="aspect-ratio:500/470">${COURT_SVG}<div class="absolute inset-0 pointer-events-none">${shots.map(e => `<div class="shot-marker absolute rounded-full border w-4 h-4 ${e.isMade ? 'bg-emerald-500 border-emerald-300' : 'bg-rose-500 border-rose-300 opacity-80'}" style="left:${e.x}%;top:${e.y}%"></div>`).join('')}</div></div>
+  </div>`;
+}
+function teamDetail(t) {
+  const map = playerStatsMap(t.id), tot = emptyAgg(), totPh = PHASES.map(() => ({ a: 0, m: 0, pts: 0 }));
+  const data = t.players.map(p => {
+    const m = map[p.id], evs = m ? m.evs : [], a = aggOf(evs), ph = phaseOf(evs);
+    addAgg(tot, a); ph.forEach((d, i) => { totPh[i].a += d.a; totPh[i].m += d.m; totPh[i].pts += d.pts; });
+    return { p, a, ph, evs, pj: m ? m.games.size : 0 };
+  });
+  const inp = 'bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs', td = 'p-2 text-right whitespace-nowrap';
+  const roster = t.players.map((p, i) => `<div class="flex items-center gap-2 bg-slate-900/80 p-2 rounded border border-slate-700"><span class="text-xs text-slate-400 w-5">${i + 1}</span><input value="${esc(p.number)}" onchange="updTP('${t.id}','${p.id}','number',this.value)" class="w-14 ${inp} font-bold text-indigo-300 text-center"><input value="${esc(p.name)}" onchange="updTP('${t.id}','${p.id}','name',this.value)" class="flex-1 min-w-0 ${inp}"><button onclick="delTP('${t.id}','${p.id}')" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-trash"></i></button></div>`).join('');
+  const sRows = data.map(d => `<tr onclick="selPlayer('${d.p.id}')" class="cursor-pointer ${tv.player === d.p.id ? 'bg-indigo-900/40' : 'hover:bg-slate-700/50'}"><td class="p-2 whitespace-nowrap"><b class="text-indigo-300">#${esc(d.p.number)}</b> ${esc(d.p.name)}</td><td class="${td}">${d.pj}</td><td class="${td} font-extrabold">${d.a.pts}</td><td class="${td}">${d.a.fgm}/${d.a.fga}</td><td class="${td}">${d.a.m2}/${d.a.a2}</td><td class="${td}">${d.a.m3}/${d.a.a3}</td><td class="${td}">${d.a.ftm}/${d.a.fta}</td><td class="${td} text-indigo-300 font-semibold">${ppiF(d.a.fgp, d.a.fga)}</td><td class="${td}">${efgF(d.a)}</td><td class="${td}">${d.a.to}</td></tr>`).join('');
+  const pRows = data.map(d => `<tr onclick="selPlayer('${d.p.id}')" class="cursor-pointer ${tv.player === d.p.id ? 'bg-indigo-900/40' : 'hover:bg-slate-700/50'}"><td class="p-2 whitespace-nowrap"><b class="text-indigo-300">#${esc(d.p.number)}</b> ${esc(d.p.name)}</td>${d.ph.map(x => `<td class="${td}">${x.a ? `<b>${x.pts}</b> <span class="text-slate-400">(${x.m}/${x.a})</span>` : '<span class="text-slate-600">-</span>'}</td>`).join('')}</tr>`).join('');
+  const gl = gamesForStats().filter(g => g.myTeamId === t.id || g.oppTeamId === t.id).map(g => { const sc = scores(g); return `<div class="flex justify-between gap-2 text-xs bg-slate-900/60 rounded p-2"><span class="text-slate-400">${esc(g.date || '')}${g === S ? ' · en curso' : ''}</span><span>${esc(g.myTeam || 'Mi Equipo')} <b>${sc.us}</b> - <b>${sc.them}</b> ${esc(g.opp || 'Rival')}</span></div>`; }).join('');
+  const sel = t.players.find(p => p.id === tv.player);
+  const card = 'bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-xl';
+  return `<div class="${card}">
+      <div class="flex gap-2 mb-3"><input value="${esc(t.name)}" onchange="renTeam('${t.id}',this.value)" class="flex-1 min-w-0 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm font-bold"><button onclick="delTeam('${t.id}')" class="bg-rose-900/50 hover:bg-rose-800 text-rose-200 text-xs px-3 rounded-lg border border-rose-700"><i class="fa-solid fa-trash"></i> Eliminar</button></div>
+      <p class="text-xs font-bold text-slate-300 mb-2">Jugadores (${t.players.length}/15)</p>
+      <div class="space-y-2">${roster || '<p class="text-xs text-slate-500">Todavía no hay jugadores.</p>'}</div>
+      ${t.players.length < 15 ? `<div class="flex gap-2 mt-2"><input id="inp-pnum" placeholder="#" class="w-14 ${inp} text-center"><input id="inp-pname" placeholder="Nombre del jugador" class="flex-1 min-w-0 ${inp}"><button onclick="addTP('${t.id}')" class="bg-indigo-600 hover:bg-indigo-500 text-xs font-bold px-3 rounded-lg">+ Agregar</button></div>` : ''}
+      <p class="text-[11px] text-slate-500 mt-2">Para usar este equipo en un partido, vinculalo desde la pestaña Partidos.</p>
+    </div>
+    <div class="${card}"><h3 class="text-sm font-bold mb-3"><i class="fa-solid fa-user text-indigo-400"></i> Estadísticas individuales <span class="text-slate-400 font-normal text-xs">· todos los partidos con este equipo vinculado</span></h3>
+      <div class="overflow-x-auto"><table class="w-full text-xs text-slate-300"><thead class="bg-slate-900/80 text-slate-400 uppercase font-semibold"><tr><th class="p-2 text-left">Jugador</th><th class="p-2 text-right">PJ</th><th class="p-2 text-right">PTS</th><th class="p-2 text-right">TC</th><th class="p-2 text-right">2P</th><th class="p-2 text-right">3P</th><th class="p-2 text-right">TL</th><th class="p-2 text-right">PPI</th><th class="p-2 text-right">eFG%</th><th class="p-2 text-right">PÉR</th></tr></thead>
+      <tbody class="divide-y divide-slate-700">${sRows || '<tr><td colspan="10" class="p-4 text-center text-slate-500">Sin jugadores.</td></tr>'}</tbody>
+      <tfoot><tr class="bg-slate-900/80 font-bold border-t-2 border-slate-600"><td class="p-2">TOTAL</td><td class="${td}">-</td><td class="${td}">${tot.pts}</td><td class="${td}">${tot.fgm}/${tot.fga}</td><td class="${td}">${tot.m2}/${tot.a2}</td><td class="${td}">${tot.m3}/${tot.a3}</td><td class="${td}">${tot.ftm}/${tot.fta}</td><td class="${td}">${ppiF(tot.fgp, tot.fga)}</td><td class="${td}">${efgF(tot)}</td><td class="${td}">${tot.to}</td></tr></tfoot></table></div>
+      <p class="text-[11px] text-slate-500 mt-2">Tocá un jugador para ver su detalle y su mapa de tiro. Solo cuentan los partidos jugados con el equipo vinculado desde Partidos.</p>
+    </div>
+    <div class="${card}"><h3 class="text-sm font-bold mb-3"><i class="fa-solid fa-bolt text-amber-400"></i> Puntos por momento de la ofensiva <span class="text-slate-400 font-normal text-xs">· puntos (aciertos/intentos)</span></h3>
+      <div class="overflow-x-auto"><table class="w-full text-xs text-slate-300"><thead class="bg-slate-900/80 text-slate-400 uppercase font-semibold"><tr><th class="p-2 text-left">Jugador</th>${PHASES.map(x => `<th class="p-2 text-right">${x}</th>`).join('')}</tr></thead>
+      <tbody class="divide-y divide-slate-700">${pRows}</tbody>
+      <tfoot><tr class="bg-slate-900/80 font-bold border-t-2 border-slate-600"><td class="p-2">TOTAL</td>${totPh.map(x => `<td class="${td}">${x.a ? `${x.pts} <span class="text-slate-400 font-normal">(${x.m}/${x.a})</span>` : '-'}</td>`).join('')}</tr></tfoot></table></div>
+    </div>
+    ${sel ? playerDetail(t, sel, data.find(d => d.p.id === sel.id).evs) : ''}
+    <div class="${card}"><h3 class="text-sm font-bold mb-3"><i class="fa-solid fa-box-archive text-emerald-400"></i> Partidos de ${esc(t.name)}</h3><div class="space-y-1.5">${gl || '<p class="text-xs text-slate-500">Todavía no hay partidos con este equipo vinculado.</p>'}</div></div>`;
+}
+function renderTeams() {
+  const t = teams.find(x => x.id === tv.team);
+  $('tab-teams').innerHTML = `<div class="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-xl">
+      <h3 class="text-sm font-bold mb-3"><i class="fa-solid fa-people-group text-indigo-400"></i> Equipos del torneo</h3>
+      <div class="flex gap-2 mb-3"><input id="inp-newteam" placeholder="Nombre del equipo" class="flex-1 min-w-0 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm"><button onclick="newTeam()" class="bg-indigo-600 hover:bg-indigo-500 font-bold text-xs px-4 rounded-lg">Agregar</button></div>
+      <div class="flex flex-wrap gap-2">${teams.map(x => `<button onclick="selTeam('${x.id}')" class="px-3 py-2 rounded-lg border text-xs font-bold ${x.id === tv.team ? 'bg-indigo-600 border-indigo-300' : 'bg-slate-900 border-slate-600'}">${esc(x.name)} <span class="font-normal text-slate-300">(${x.players.length})</span></button>`).join('') || '<p class="text-xs text-slate-500">Todavía no cargaste equipos.</p>'}</div>
+    </div>` + (t ? teamDetail(t) : '');
+}
+
+function renderGames() {
+  renderBackupInfo();
+  const so = sel => '<option value="">— Sin vincular —</option>' + teams.map(t => `<option value="${t.id}" ${t.id === sel ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+  $('sel-my').innerHTML = so(S.myTeamId); $('sel-opp').innerHTML = so(S.oppTeamId);
+  $('inp-my').value = S.myTeam || ''; $('inp-opp').value = S.opp || ''; $('inp-date').value = S.date || today();
+  $('games-list').innerHTML = games.length ? games.map(g => `
+    <div class="bg-slate-900/70 border ${g.id === S.gameId ? 'border-indigo-500' : 'border-slate-700'} rounded-lg p-3 flex flex-wrap items-center justify-between gap-2">
+      <div><div class="font-bold text-sm">${esc(g.myTeam || 'Mi Equipo')} vs ${esc(g.opp || 'Rival')}${g.id === S.gameId ? ' <span class="text-[10px] text-indigo-300">(abierto)</span>' : ''}</div>
+      <div class="text-[11px] text-slate-400">${esc(g.date)} · ${g.events.length} eventos</div></div>
+      <div class="text-xl font-extrabold">${g.us} - ${g.them}</div>
+      <div class="flex gap-1 text-[11px]">
+        <button onclick="openGame('${g.id}')" class="bg-indigo-600 hover:bg-indigo-500 px-2 py-1 rounded font-bold">Abrir</button>
+        <button onclick="exportXLSX(games.find(x=>x.id==='${g.id}'))" class="bg-emerald-700 hover:bg-emerald-600 px-2 py-1 rounded font-bold">Excel</button>
+        <button onclick="exportPDF(games.find(x=>x.id==='${g.id}'))" class="bg-rose-700 hover:bg-rose-600 px-2 py-1 rounded font-bold">PDF</button>
+        <button onclick="deleteGame('${g.id}')" class="bg-rose-900/60 hover:bg-rose-800 text-rose-200 px-2 py-1 rounded border border-rose-700"><i class="fa-solid fa-trash"></i></button>
+      </div></div>`).join('') : '<p class="text-xs text-slate-500">Todavía no hay partidos guardados.</p>';
+}
+
+function updateUI(light) {
+  const sc = scores(S);
+  $('score-us').innerText = sc.us; $('score-them').innerText = sc.them;
+  $('rival-label').innerText = S.opp || 'Rival'; $('my-label').innerText = S.myTeam || 'Mi Equipo';
+  if (light) return;
+  renderQuarterBtns();
+  ['us', 'them'].forEach(t => {
+    const r = remainingTM(t, S.quarter), c = t === 'us' ? 'bg-indigo-500 border-indigo-300' : 'bg-rose-500 border-rose-300';
+    $(`tm-${t}-dots`).innerHTML = r ? `<span class="w-3 h-3 rounded-full border inline-block ${c}"></span>`.repeat(r) : '<span class="text-[10px] text-slate-500">0 T.M.</span>';
+  });
+  renderMarkers(); renderOnCourt(); renderPhaseStats(); renderTOStats(); renderFTStats(); renderHistory(); updateCharts(); switchTab(currentTab);
+  autosave(true);
+}
+
+// ---------- Guardado ----------
+const snapshot = () => { const sc = scores(S); return JSON.parse(JSON.stringify({ ...S, id: S.gameId, us: sc.us, them: sc.them, savedAt: Date.now() })); };
+function setStatus(ok, label) {
+  $('save-status').innerText = ok ? `${label} ${new Date().toLocaleTimeString('es-AR')}` : '⚠ No se pudo guardar (almacenamiento no disponible)';
+}
+function autosave(silent) {
+  // silent: guarda el borrador al instante sin mostrar hora; el temporizador sí actualiza el estado
+  const ok = lsSet(LS_CUR, S);
+  if (S.gameId) { const i = games.findIndex(g => g.id === S.gameId); if (i >= 0) { games[i] = snapshot(); lsSet(LS_GAMES, games); } }
+  if (!silent) setStatus(ok, 'Autoguardado');
+}
+setInterval(() => autosave(false), 60000);
+document.addEventListener('visibilitychange', () => { if (document.hidden) autosave(true); });
+window.addEventListener('pagehide', () => autosave(true));
+
+function saveGame() {
+  if (!S.events.length) { alert('No hay eventos para guardar.'); return; }
+  if (!S.gameId) S.gameId = 'g' + Date.now();
+  const snap = snapshot(), i = games.findIndex(g => g.id === S.gameId);
+  if (i >= 0) games[i] = snap; else games.unshift(snap);
+  const ok = lsSet(LS_GAMES, games); lsSet(LS_CUR, S);
+  renderGames(); setStatus(ok, 'Partido guardado');
+}
+function openGame(id) {
+  const g = games.find(x => x.id === id); if (!g) return;
+  if (!confirm('Se abrirá este partido y reemplazará el actual (guardalo antes si no lo hiciste). ¿Continuar?')) return;
+  S = Object.assign(freshState(), JSON.parse(JSON.stringify({ quarter: 'Q1', players: g.players, onCourt: g.onCourt || [1, 2, 3, 4, 5], myTeam: g.myTeam || "", myTeamId: g.myTeamId || null, oppTeamId: g.oppTeamId || null, rPlayers: g.rPlayers || defaultRPlayers(), rOnCourt: g.rOnCourt || [1, 2, 3, 4, 5], events: g.events, gameId: g.id, opp: g.opp, date: g.date })));
+  updateUI(); switchTab('court');
+}
+function newGame() {
+  if (!confirm('¿Empezar un partido nuevo? Se conservará la plantilla. Guardá el actual antes si lo necesitás.')) return;
+  const keep = { myTeam: S.myTeam, myTeamId: S.myTeamId }; S = Object.assign(freshState(S.players), keep); updateUI();
+}
+function deleteGame(id) {
+  if (!confirm('¿Eliminar este partido guardado?')) return;
+  games = games.filter(g => g.id !== id); lsSet(LS_GAMES, games);
+  if (S.gameId === id) S.gameId = null;
+  autosave(true); renderGames();
+}
+
+// ---------- Gráficos ----------
+const barLabels = { id: 'barLabels', afterDatasetsDraw(chart) {
+  const meta = chart.$meta2; if (!meta) return;
+  const ctx = chart.ctx, base = chart.scales.y.getPixelForValue(0);
+  ctx.save(); ctx.textAlign = 'center'; ctx.fillStyle = '#f1f5f9';
+  chart.data.datasets.forEach((ds, di) => chart.getDatasetMeta(di).data.forEach((bar, i) => {
+    const d = meta[di][i], top = bar.y, h = base - top;
+    ctx.font = 'bold 12px sans-serif'; ctx.fillText(String(+d.ppi.toFixed(2)).replace('.', ','), bar.x, top - 6);
+    ctx.font = '11px sans-serif'; ctx.fillText(`${d.m}/${d.a}`, bar.x, h >= 22 ? base - 6 : top - 20);
+  }));
+  ctx.restore();
+} };
+function initCharts() {
+  if (typeof Chart === 'undefined') return;
+  Chart.defaults.color = '#cbd5e1'; Chart.defaults.borderColor = '#334155';
+  phaseChart = new Chart($('chart-phases'), { type: 'bar', plugins: [barLabels],
+    data: { labels: PHASES, datasets: [{ label: 'Nosotros (PPI)', data: [], backgroundColor: '#6366f1' }, { label: 'Rival (PPI)', data: [], backgroundColor: '#f43f5e' }] },
+    options: { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 30 } }, scales: { y: { min: 0, suggestedMax: 3, title: { display: true, text: 'Puntos por intento' } } } } });
+  quarterChart = new Chart($('chart-quarters'), { type: 'line',
+    data: { labels: QUARTERS, datasets: [{ label: 'Nosotros eFG%', data: [], borderColor: '#6366f1', tension: 0.3 }, { label: 'Rival eFG%', data: [], borderColor: '#f43f5e', tension: 0.3 }] },
+    options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, suggestedMax: 100, title: { display: true, text: 'eFG%' } } } } });
+}
+function phaseAgg(type) {
+  return PHASES.map(ph => {
+    const ev = S.events.filter(e => e.type === type && e.phase === ph), a = ev.length, m = ev.filter(e => e.isMade).length;
+    const pts = ev.reduce((x, e) => x + (e.isMade ? e.points : 0), 0);
+    return { a, m, pts, ppi: a ? pts / a : 0 };
+  });
+}
+function updateCharts() {
+  if (!phaseChart) return;
+  const us = phaseAgg('SHOT'), th = phaseAgg('RIVAL_FG');
+  phaseChart.$meta2 = [us, th];
+  phaseChart.data.datasets[0].data = us.map(d => +d.ppi.toFixed(2));
+  phaseChart.data.datasets[1].data = th.map(d => +d.ppi.toFixed(2));
+  phaseChart.update();
+  const pct = type => QUARTERS.map(q => { const qs = S.events.filter(e => e.type === type && e.quarter === q); if (!qs.length) return 0; const pts = qs.reduce((a, e) => a + (e.isMade ? e.points : 0), 0); return Math.round(pts / (2 * qs.length) * 1000) / 10; });
+  quarterChart.data.datasets[0].data = pct('SHOT');
+  quarterChart.data.datasets[1].data = pct('RIVAL_FG');
+  quarterChart.update();
+}
+
+// ---------- Exportar: Excel y PDF (informe del partido) ----------
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+async function deliverFile(blob, name, type) {
+  const file = new File([blob], name, { type });
+  if (isIOS() && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); return; } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+const exportName = (st, ext) => `${(st.myTeam || 'MiEquipo')}_vs_${(st.opp || 'Rival')}_${st.date || today()}.${ext}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.-]+/g, '_');
+function evDetail(e) {
+  if (e.type === 'SHOT' || e.type === 'RIVAL_FG') return `${e.points}pt ${e.isMade ? 'anotado' : 'fallado'}${e.ftMade || e.ftMissed ? ` (TL ${e.ftMade}/${e.ftMade + e.ftMissed})` : ''}`;
+  if (e.type === 'RIVAL_FT' || e.type === 'FT') return `Tiro libre (${e.origin === 'bonus' ? 'Bonus' : 'Por jugada'})`;
+  if (e.type === 'TURNOVER') return 'Pérdida: ' + e.situation;
+  return e.description || '';
+}
+function boxData(st, us) {
+  const list = (us ? st.players : st.rPlayers) || [], tot = emptyAgg(), rows = [];
+  const evs = st.events.filter(e => us ? (e.type === 'SHOT' || e.type === 'TURNOVER' || e.type === 'FT') : (e.type === 'RIVAL_FG' || e.type === 'RIVAL_FT'));
+  const line = (n, name, a) => [n, name, a.pts, `${a.fgm}/${a.fga}`, a.fga ? Math.round(a.fgm / a.fga * 100) + '%' : '-', `${a.m2}/${a.a2}`, `${a.m3}/${a.a3}`, `${a.ftm}/${a.fta}`, ppiF(a.fgp, a.fga), us ? a.to : '-'];
+  list.forEach(p => { const a = emptyAgg(); evs.filter(e => e.playerId === p.id).forEach(e => addEv(a, e)); if (a.n) { addAgg(tot, a); rows.push(line('#' + p.number, p.name, a)); } });
+  const ua = emptyAgg(); evs.filter(e => e.playerId == null).forEach(e => addEv(ua, e));
+  if (ua.n) { addAgg(tot, ua); rows.push(line('-', 'Sin jugador asignado', ua)); }
+  return { body: rows, foot: line('', 'TOTAL', tot) };
+}
+function buildReport(st) {
+  const my = st.myTeam || 'Mi Equipo', opp = st.opp || 'Rival', ev = st.events, sc = scores(st);
+  const qs = QUARTERS.filter(q => q !== 'OT' || ev.some(e => e.quarter === 'OT'));
+  const qsc = qs.map(q => scores({ events: ev.filter(e => e.quarter === q) }));
+  const BOXH = ['#', 'Jugador', 'PTS', 'TC', 'TC%', '2P', '3P', 'TL', 'PPI', 'PÉR'];
+  const bu = boxData(st, true), br = boxData(st, false);
+  const pa = type => PHASES.map(ph => { const sh = ev.filter(e => e.type === type && e.phase === ph), pts = sh.reduce((x, e) => x + (e.isMade ? e.points : 0), 0); return [ppiF(pts, sh.length), `${sh.filter(e => e.isMade).length}/${sh.length}`]; });
+  const A = pa('SHOT'), B = pa('RIVAL_FG');
+  const efg = type => qs.map(q => { const x = ev.filter(e => e.type === type && e.quarter === q); return x.length ? String(Math.round(x.reduce((a, e) => a + (e.isMade ? e.points : 0), 0) / (2 * x.length) * 1000) / 10).replace('.', ',') + '%' : '-'; });
+  const ftr = (name, o) => [name, `${o.play.m}/${o.play.a}`, `${o.bonus.m}/${o.bonus.a}`, `${o.play.m + o.bonus.m}/${o.play.a + o.bonus.a}`, (o.play.a + o.bonus.a) ? Math.round((o.play.m + o.bonus.m) / (o.play.a + o.bonus.a) * 100) + '%' : '-'];
+  const tc = TURNOVERS.map(t => ev.filter(e => e.type === 'TURNOVER' && e.situation === t).length), tt = tc.reduce((a, b) => a + b, 0);
+  const sections = [
+    { title: 'Marcador por cuarto', head: ['Equipo', ...qs, 'Total'], body: [[my, ...qsc.map(x => x.us), sc.us], [opp, ...qsc.map(x => x.them), sc.them]] },
+    { title: 'Box score - ' + my, head: BOXH, body: bu.body, foot: bu.foot, color: [79, 70, 229] },
+    { title: 'Box score - ' + opp, head: BOXH, body: br.body, foot: br.foot, color: [225, 29, 72] },
+    { title: 'Eficiencia ofensiva por momento (PPI)', head: ['Momento', my + ' PPI', 'Acier./Int.', opp + ' PPI', 'Acier./Int.'], body: PHASES.map((ph, i) => [ph, ...A[i], ...B[i]]) },
+    { title: 'eFG% por cuarto', head: ['Equipo', ...qs], body: [[my, ...efg('SHOT')], [opp, ...efg('RIVAL_FG')]] },
+    { title: 'Tiros libres: por jugada vs bonus', head: ['Equipo', 'Por jugada', 'Bonus', 'Total', '%'], body: [ftr(my, ftAgg(true, ev)), ftr(opp, ftAgg(false, ev))] },
+    { title: 'Pérdidas por situación - ' + my, head: ['Situación', 'Cantidad', '%'], body: TURNOVERS.map((t, i) => [t, tc[i], tt ? Math.round(tc[i] / tt * 100) + '%' : '-']), foot: ['Total', tt, ''] },
+  ];
+  const history = ev.map(e => [e.quarter, tn(e, st), e.playerName ? `#${e.playerNumber} ${e.playerName}` : '-', evDetail(e), e.phase || '-', e.isMade === undefined ? '-' : e.isMade ? 'Acierto' : 'Fallo']);
+  const shots = ev.filter(e => (e.type === 'SHOT' || e.type === 'RIVAL_FG') && e.x !== undefined);
+  return { my, opp, us: sc.us, them: sc.them, sub: `Fecha: ${st.date || ''}`, sections, history, histHead: ['Cuarto', 'Equipo', 'Jugador', 'Detalle', 'Fase', 'Resultado'], shots };
+}
+async function exportXLSX(st) {
+  if (!st) return;
+  const r = buildReport(st), rows = [[`${r.my}  ${r.us} - ${r.them}  ${r.opp}`], [r.sub], []];
+  r.sections.forEach(sec => { rows.push([sec.title.toUpperCase()], sec.head); sec.body.forEach(b => rows.push(b)); if (sec.foot) rows.push(sec.foot); rows.push([]); });
+  const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{ wch: 24 }, { wch: 24 }, ...Array(8).fill({ wch: 11 })];
+  XLSX.utils.book_append_sheet(wb, ws, 'Resumen del partido');
+  const wh = XLSX.utils.aoa_to_sheet([r.histHead, ...r.history]); wh['!cols'] = [{ wch: 8 }, { wch: 20 }, { wch: 24 }, { wch: 32 }, { wch: 12 }, { wch: 10 }];
+  XLSX.utils.book_append_sheet(wb, wh, 'Historial');
+  const sh = (st.events || []).filter(e => (e.type === 'SHOT' || e.type === 'RIVAL_FG') && e.x !== undefined).map(e => ({ Cuarto: e.quarter, Equipo: tn(e, st), Jugador: e.playerName ? `#${e.playerNumber} ${e.playerName}` : '-', Valor: e.points + ' pts', Resultado: e.isMade ? 'Anotado' : 'Fallado', Momento: e.phase || '-', 'TL conv.': e.ftMade || 0, 'TL fall.': e.ftMissed || 0, 'X (%)': +e.x, 'Y (%)': +e.y }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sh.length ? sh : [{ Info: 'Sin tiros ubicados en el mapa' }]), 'Tiros (coordenadas)');
+  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  await deliverFile(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), exportName(st, 'xlsx'), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+}
+function drawCourt(doc, x0, y0, w, shots, square) {
+  const k = w / 500, h = 470 * k, P = (cx, cy) => [x0 + cx * k, y0 + cy * k];
+  doc.setDrawColor(100, 116, 139); doc.setLineWidth(0.3);
+  doc.rect(x0 + 5 * k, y0 + 5 * k, 490 * k, 460 * k); doc.rect(x0 + 170 * k, y0 + 5 * k, 160 * k, 190 * k);
+  doc.circle(...P(250, 190), 60 * k); doc.line(...P(220, 20), ...P(280, 20));
+  doc.setDrawColor(249, 115, 22); doc.circle(...P(250, 32), 9 * k);
+  doc.setDrawColor(99, 102, 241); doc.setLineWidth(0.5);
+  const pts = []; for (let i = 0; i <= 40; i++) { const a = Math.PI - Math.PI * i / 40; pts.push(P(250 + 220 * Math.cos(a), 90 + 220 * Math.sin(a))); }
+  doc.line(...P(30, 5), ...P(30, 90)); for (let i = 0; i < pts.length - 1; i++) doc.line(...pts[i], ...pts[i + 1]); doc.line(...P(470, 90), ...P(470, 5));
+  shots.forEach(s => {
+    const px = x0 + (+s.x) / 100 * w, py = y0 + (+s.y) / 100 * h;
+    doc.setFillColor(...(s.isMade ? [16, 185, 129] : [244, 63, 94]));
+    if (square) doc.rect(px - 1.6, py - 1.6, 3.2, 3.2, 'F'); else doc.circle(px, py, 1.7, 'F');
+  });
+  return h;
+}
+async function exportPDF(st) {
+  if (!st) return;
+  const J = window.jspdf;
+  if (!J || !J.jsPDF) { alert('No se pudo cargar la librería de PDF. Abrí la app con internet una vez y probá de nuevo.'); return; }
+  const r = buildReport(st), doc = new J.jsPDF({ unit: 'mm', format: 'a4' }), W = 210, M = 12;
+  doc.setFontSize(15); doc.setTextColor(30, 41, 59); doc.text('CourtStats PRO', M, 14);
+  doc.setFontSize(9); doc.setTextColor(100); doc.text(r.sub, M, 19);
+  doc.setFontSize(17); doc.setTextColor(0); doc.text(`${r.my}  ${r.us} - ${r.them}  ${r.opp}`, W / 2, 30, { align: 'center' });
+  let y = 38;
+  const table = (title, head, body, foot, color) => {
+    if (y > 250) { doc.addPage(); y = 14; }
+    doc.setFontSize(10.5); doc.setTextColor(30, 41, 59); doc.text(title, M, y);
+    doc.autoTable({ startY: y + 2, head: [head], body, foot: foot ? [foot] : undefined, theme: 'grid', styles: { fontSize: 8, cellPadding: 1.4 },
+      headStyles: { fillColor: color || [30, 41, 59] }, footStyles: { fillColor: [226, 232, 240], textColor: 0, fontStyle: 'bold' }, margin: { left: M, right: M } });
+    y = doc.lastAutoTable.finalY + 7;
+  };
+  r.sections.forEach(s => table(s.title, s.head, s.body, s.foot, s.color));
+  doc.addPage(); doc.setFontSize(12); doc.setTextColor(30, 41, 59); doc.text('Mapa de tiro', M, 14);
+  const w = (W - 2 * M - 6) / 2, mine = r.shots.filter(e => e.type === 'SHOT'), theirs = r.shots.filter(e => e.type === 'RIVAL_FG');
+  doc.setFontSize(9);
+  doc.text(`${r.my}: ${mine.filter(e => e.isMade).length}/${mine.length} anotados (círculos)`, M, 22);
+  doc.text(`${r.opp}: ${theirs.filter(e => e.isMade).length}/${theirs.length} anotados (cuadrados)`, M + w + 6, 22);
+  drawCourt(doc, M, 25, w, mine, false); drawCourt(doc, M + w + 6, 25, w, theirs, true);
+  doc.setTextColor(100); doc.text('Verde: anotado · Rojo: fallado', M, 25 + w * 0.94 + 6);
+  doc.addPage(); y = 14; table('Historial del partido', r.histHead, r.history.length ? r.history : [['-', '-', '-', 'Sin eventos', '-', '-']]);
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120); doc.text(`CourtStats PRO · ${i}/${n}`, W / 2, 291, { align: 'center' }); }
+  await deliverFile(doc.output('blob'), exportName(st, 'pdf'), 'application/pdf');
+}
+
+// ---------- Versión, migraciones y respaldo ----------
+// Al publicar una mejora: subir APP_VERSION aquí y VERSION en sw.js.
+const APP_VERSION = '1.2.0';
+// SCHEMA: versión del formato de los datos guardados. Si un cambio futuro altera ese formato,
+// se sube SCHEMA y se agrega en MIGRATIONS[n] una función que convierte los datos viejos.
+const SCHEMA = 1, LS_SCHEMA = 'courtstats_schema', LS_BACKUP = 'courtstats_lastbackup';
+const MIGRATIONS = {
+  // 2: d => { d.games.forEach(g => { /* convertir */ }); return d; },
+};
+function migrate(d, from) {
+  for (let v = (from || 1) + 1; v <= SCHEMA; v++) if (MIGRATIONS[v]) d = MIGRATIONS[v](d);
+  return d;
+}
+(function () {
+  const from = lsGet(LS_SCHEMA, 1);
+  if (from < SCHEMA) { const d = migrate({ S, games, teams }, from); S = d.S; games = d.games; teams = d.teams; lsSet(LS_GAMES, games); saveTeams(); lsSet(LS_CUR, S); }
+  lsSet(LS_SCHEMA, SCHEMA);
+})();
+
+function buildBackup() {
+  const gs = games.map(g => g.id === S.gameId ? snapshot() : g);
+  if (S.events.length && !games.some(g => g.id === S.gameId)) gs.unshift({ ...snapshot(), id: S.gameId || 'g' + Date.now() });
+  return { app: 'courtstats', schema: SCHEMA, appVersion: APP_VERSION, exportedAt: new Date().toISOString(), games: gs, teams };
+}
+function mergeBackup(d) {
+  if (!d || d.app !== 'courtstats' || !Array.isArray(d.games) || !Array.isArray(d.teams)) throw new Error('El archivo no es un respaldo de CourtStats.');
+  if ((d.schema || 1) > SCHEMA) throw new Error('El respaldo es de una versión más nueva de la app. Actualizá la app y probá de nuevo.');
+  const m = migrate({ S: freshState(), games: d.games, teams: d.teams }, d.schema || 1);
+  let ng = 0, nt = 0;
+  m.teams.forEach(t => { if (!teams.some(x => x.id === t.id)) { teams.push(t); nt++; } });
+  m.games.forEach(g => { if (!games.some(x => x.id === g.id)) { games.push(g); ng++; } });
+  games.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+  saveTeams(); lsSet(LS_GAMES, games);
+  return { ng, nt };
+}
+const backupFile = () => new File([JSON.stringify(buildBackup())], `CourtStats_respaldo_${today()}.json`, { type: 'application/json' });
+function exportBackup() {
+  const f = backupFile(), url = URL.createObjectURL(f), a = document.createElement('a');
+  a.href = url; a.download = f.name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  lsSet(LS_BACKUP, Date.now()); renderBackupInfo();
+}
+async function shareBackup() {
+  try { await navigator.share({ files: [backupFile()], title: 'Respaldo CourtStats' }); lsSet(LS_BACKUP, Date.now()); renderBackupInfo(); } catch (e) { /* cancelado */ }
+}
+function importBackup(input) {
+  const file = input.files && input.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try { const res = mergeBackup(JSON.parse(r.result)); updateUI(); renderGames(); alert(`Respaldo importado: ${res.ng} partido(s) y ${res.nt} equipo(s) nuevos.`); }
+    catch (e) { alert(e.message || 'No se pudo leer el archivo.'); }
+    input.value = '';
+  };
+  r.readAsText(file);
+}
+function renderBackupInfo() {
+  const t = lsGet(LS_BACKUP, null);
+  $('backup-info').innerText = `${games.length} partido(s) y ${teams.length} equipo(s) guardados. ` + (t ? 'Último respaldo: ' + new Date(t).toLocaleString('es-AR') : 'Todavía no hiciste ningún respaldo.');
+  $('app-version').innerText = APP_VERSION;
+}
+
+// ---------- PWA: instalación y actualizaciones ----------
+let deferredInstall = null, waitingWorker = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; $('btn-install').classList.remove('hidden'); });
+window.addEventListener('appinstalled', () => $('btn-install').classList.add('hidden'));
+function installApp() { if (!deferredInstall) return; deferredInstall.prompt(); deferredInstall = null; $('btn-install').classList.add('hidden'); }
+function applyUpdate() { autosave(true); if (waitingWorker) waitingWorker.postMessage('SKIP_WAITING'); }
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('./sw.js');
+      const show = w => { waitingWorker = w; $('update-banner').classList.remove('hidden'); };
+      if (reg.waiting && navigator.serviceWorker.controller) show(reg.waiting);
+      reg.addEventListener('updatefound', () => {
+        const w = reg.installing; if (!w) return;
+        w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) show(w); });
+      });
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+      setInterval(() => reg.update().catch(() => {}), 3600000);
+    } catch (e) { /* sin service worker: la app sigue funcionando online */ }
+  });
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (reloading) return; reloading = true; autosave(true); location.reload(); });
+}
+if (navigator.canShare) { try { if (navigator.canShare({ files: [new File(['{}'], 'a.json', { type: 'application/json' })] })) document.addEventListener('DOMContentLoaded', () => $('btn-share').classList.remove('hidden')); } catch (e) {} }
+
+// ---------- Inicio ----------
+document.addEventListener('DOMContentLoaded', () => {
+  // Migración por si el estado guardado viene incompleto
+  if (!Array.isArray(S.players) || S.players.length < 5) S.players = defaultPlayers();
+  if (!Array.isArray(S.events)) S.events = [];
+  if (!Array.isArray(S.onCourt) || S.onCourt.length !== 5) S.onCourt = S.players.slice(0, 5).map(p => p.id);
+  populatePlayerSelect(); initCharts(); switchTab('court'); updateUI();
+  $('inp-my').value = S.myTeam || ''; $('inp-opp').value = S.opp || ''; $('inp-date').value = S.date || today();
+  setStatus(true, S.events.length ? 'Partido restaurado' : 'Listo');
+});
+</script>
+</body>
+</html>
