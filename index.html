@@ -17,6 +17,8 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 <style>
   body{touch-action:manipulation;user-select:none;-webkit-user-select:none}
   input{user-select:text;-webkit-user-select:text}
@@ -126,7 +128,7 @@
         <div class="space-y-2 text-xs" id="rphase-stats"></div>
         </div>
         <div class="mt-4 pt-3 border-t border-slate-700">
-          <button onclick="exportXLSX(S)" class="w-full bg-emerald-600 hover:bg-emerald-500 font-bold py-2 px-3 rounded-lg text-xs"><i class="fa-solid fa-file-excel text-base"></i> Exportar Estadísticas (.xlsx)</button>
+          <div class="grid grid-cols-2 gap-2"><button onclick="exportXLSX(S)" class="bg-emerald-600 hover:bg-emerald-500 font-bold py-2 px-2 rounded-lg text-xs"><i class="fa-solid fa-file-excel text-base"></i> Excel</button><button onclick="exportPDF(S)" class="bg-rose-600 hover:bg-rose-500 font-bold py-2 px-2 rounded-lg text-xs"><i class="fa-solid fa-file-pdf text-base"></i> PDF</button></div>
         </div>
       </div>
     </div>
@@ -566,9 +568,9 @@ function addFT(side, origin, isMade) {
     playerId: p ? p.id : null, playerPid: p ? p.pid : undefined, playerNumber: p ? p.number : undefined, playerName: p ? p.name : undefined });
   updateUI();
 }
-function ftAgg(us) {
+function ftAgg(us, evs = S.events) {
   const o = { play: { m: 0, a: 0 }, bonus: { m: 0, a: 0 } };
-  S.events.forEach(e => {
+  evs.forEach(e => {
     if (e.type === (us ? 'SHOT' : 'RIVAL_FG')) { o.play.m += e.ftMade || 0; o.play.a += (e.ftMade || 0) + (e.ftMissed || 0); }
     else if (e.type === (us ? 'FT' : 'RIVAL_FT')) { const k = e.origin === 'bonus' ? o.bonus : o.play; k.a++; if (e.isMade) k.m++; }
   });
@@ -749,6 +751,7 @@ function renderGames() {
       <div class="flex gap-1 text-[11px]">
         <button onclick="openGame('${g.id}')" class="bg-indigo-600 hover:bg-indigo-500 px-2 py-1 rounded font-bold">Abrir</button>
         <button onclick="exportXLSX(games.find(x=>x.id==='${g.id}'))" class="bg-emerald-700 hover:bg-emerald-600 px-2 py-1 rounded font-bold">Excel</button>
+        <button onclick="exportPDF(games.find(x=>x.id==='${g.id}'))" class="bg-rose-700 hover:bg-rose-600 px-2 py-1 rounded font-bold">PDF</button>
         <button onclick="deleteGame('${g.id}')" class="bg-rose-900/60 hover:bg-rose-800 text-rose-200 px-2 py-1 rounded border border-rose-700"><i class="fa-solid fa-trash"></i></button>
       </div></div>`).join('') : '<p class="text-xs text-slate-500">Todavía no hay partidos guardados.</p>';
 }
@@ -849,38 +852,119 @@ function updateCharts() {
   quarterChart.update();
 }
 
-// ---------- Exportar Excel (partido actual o guardado) ----------
-function exportXLSX(st) {
+// ---------- Exportar: Excel y PDF (informe del partido) ----------
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+async function deliverFile(blob, name, type) {
+  const file = new File([blob], name, { type });
+  if (isIOS() && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); return; } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+const exportName = (st, ext) => `${(st.myTeam || 'MiEquipo')}_vs_${(st.opp || 'Rival')}_${st.date || today()}.${ext}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.-]+/g, '_');
+function evDetail(e) {
+  if (e.type === 'SHOT' || e.type === 'RIVAL_FG') return `${e.points}pt ${e.isMade ? 'anotado' : 'fallado'}${e.ftMade || e.ftMissed ? ` (TL ${e.ftMade}/${e.ftMade + e.ftMissed})` : ''}`;
+  if (e.type === 'RIVAL_FT' || e.type === 'FT') return `Tiro libre (${e.origin === 'bonus' ? 'Bonus' : 'Por jugada'})`;
+  if (e.type === 'TURNOVER') return 'Pérdida: ' + e.situation;
+  return e.description || '';
+}
+function boxData(st, us) {
+  const list = (us ? st.players : st.rPlayers) || [], tot = emptyAgg(), rows = [];
+  const evs = st.events.filter(e => us ? (e.type === 'SHOT' || e.type === 'TURNOVER' || e.type === 'FT') : (e.type === 'RIVAL_FG' || e.type === 'RIVAL_FT'));
+  const line = (n, name, a) => [n, name, a.pts, `${a.fgm}/${a.fga}`, a.fga ? Math.round(a.fgm / a.fga * 100) + '%' : '-', `${a.m2}/${a.a2}`, `${a.m3}/${a.a3}`, `${a.ftm}/${a.fta}`, ppiF(a.fgp, a.fga), us ? a.to : '-'];
+  list.forEach(p => { const a = emptyAgg(); evs.filter(e => e.playerId === p.id).forEach(e => addEv(a, e)); if (a.n) { addAgg(tot, a); rows.push(line('#' + p.number, p.name, a)); } });
+  const ua = emptyAgg(); evs.filter(e => e.playerId == null).forEach(e => addEv(ua, e));
+  if (ua.n) { addAgg(tot, ua); rows.push(line('-', 'Sin jugador asignado', ua)); }
+  return { body: rows, foot: line('', 'TOTAL', tot) };
+}
+function buildReport(st) {
+  const my = st.myTeam || 'Mi Equipo', opp = st.opp || 'Rival', ev = st.events, sc = scores(st);
+  const qs = QUARTERS.filter(q => q !== 'OT' || ev.some(e => e.quarter === 'OT'));
+  const qsc = qs.map(q => scores({ events: ev.filter(e => e.quarter === q) }));
+  const BOXH = ['#', 'Jugador', 'PTS', 'TC', 'TC%', '2P', '3P', 'TL', 'PPI', 'PÉR'];
+  const bu = boxData(st, true), br = boxData(st, false);
+  const pa = type => PHASES.map(ph => { const sh = ev.filter(e => e.type === type && e.phase === ph), pts = sh.reduce((x, e) => x + (e.isMade ? e.points : 0), 0); return [ppiF(pts, sh.length), `${sh.filter(e => e.isMade).length}/${sh.length}`]; });
+  const A = pa('SHOT'), B = pa('RIVAL_FG');
+  const efg = type => qs.map(q => { const x = ev.filter(e => e.type === type && e.quarter === q); return x.length ? String(Math.round(x.reduce((a, e) => a + (e.isMade ? e.points : 0), 0) / (2 * x.length) * 1000) / 10).replace('.', ',') + '%' : '-'; });
+  const ftr = (name, o) => [name, `${o.play.m}/${o.play.a}`, `${o.bonus.m}/${o.bonus.a}`, `${o.play.m + o.bonus.m}/${o.play.a + o.bonus.a}`, (o.play.a + o.bonus.a) ? Math.round((o.play.m + o.bonus.m) / (o.play.a + o.bonus.a) * 100) + '%' : '-'];
+  const tc = TURNOVERS.map(t => ev.filter(e => e.type === 'TURNOVER' && e.situation === t).length), tt = tc.reduce((a, b) => a + b, 0);
+  const sections = [
+    { title: 'Marcador por cuarto', head: ['Equipo', ...qs, 'Total'], body: [[my, ...qsc.map(x => x.us), sc.us], [opp, ...qsc.map(x => x.them), sc.them]] },
+    { title: 'Box score - ' + my, head: BOXH, body: bu.body, foot: bu.foot, color: [79, 70, 229] },
+    { title: 'Box score - ' + opp, head: BOXH, body: br.body, foot: br.foot, color: [225, 29, 72] },
+    { title: 'Eficiencia ofensiva por momento (PPI)', head: ['Momento', my + ' PPI', 'Acier./Int.', opp + ' PPI', 'Acier./Int.'], body: PHASES.map((ph, i) => [ph, ...A[i], ...B[i]]) },
+    { title: 'eFG% por cuarto', head: ['Equipo', ...qs], body: [[my, ...efg('SHOT')], [opp, ...efg('RIVAL_FG')]] },
+    { title: 'Tiros libres: por jugada vs bonus', head: ['Equipo', 'Por jugada', 'Bonus', 'Total', '%'], body: [ftr(my, ftAgg(true, ev)), ftr(opp, ftAgg(false, ev))] },
+    { title: 'Pérdidas por situación - ' + my, head: ['Situación', 'Cantidad', '%'], body: TURNOVERS.map((t, i) => [t, tc[i], tt ? Math.round(tc[i] / tt * 100) + '%' : '-']), foot: ['Total', tt, ''] },
+  ];
+  const history = ev.map(e => [e.quarter, tn(e, st), e.playerName ? `#${e.playerNumber} ${e.playerName}` : '-', evDetail(e), e.phase || '-', e.isMade === undefined ? '-' : e.isMade ? 'Acierto' : 'Fallo']);
+  const shots = ev.filter(e => (e.type === 'SHOT' || e.type === 'RIVAL_FG') && e.x !== undefined);
+  return { my, opp, us: sc.us, them: sc.them, sub: `Fecha: ${st.date || ''}`, sections, history, histHead: ['Cuarto', 'Equipo', 'Jugador', 'Detalle', 'Fase', 'Resultado'], shots };
+}
+async function exportXLSX(st) {
   if (!st) return;
-  const wb = XLSX.utils.book_new(), sc = scores(st), shots = st.events.filter(e => e.type === 'SHOT');
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{ Fecha: st.date, 'Mi equipo': st.myTeam || 'Mi Equipo', 'Pts mi equipo': sc.us, Rival: st.opp || 'Rival', 'Pts rival': sc.them }]), 'Resumen');
-  const ps = st.players.map(p => {
-    const s = shots.filter(e => e.playerId === p.id), f = (pt, made) => s.filter(e => e.points === pt && (!made || e.isMade)).length;
-    const fo = st.events.filter(e => e.type === 'FT' && e.playerId === p.id);
-    const ftm = s.reduce((a, e) => a + (e.ftMade || 0), 0) + fo.filter(e => e.isMade).length, fta = s.reduce((a, e) => a + (e.ftMade || 0) + (e.ftMissed || 0), 0) + fo.length;
-    return { Dorsal: `#${p.number}`, Nombre: p.name, Puntos: f(2, 1) * 2 + f(3, 1) * 3 + ftm, '2PT Conv.': f(2, 1), '2PT Int.': f(2), '3PT Conv.': f(3, 1), '3PT Int.': f(3), 'TL Conv.': ftm, 'TL Int.': fta };
+  const r = buildReport(st), rows = [[`${r.my}  ${r.us} - ${r.them}  ${r.opp}`], [r.sub], []];
+  r.sections.forEach(sec => { rows.push([sec.title.toUpperCase()], sec.head); sec.body.forEach(b => rows.push(b)); if (sec.foot) rows.push(sec.foot); rows.push([]); });
+  const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{ wch: 24 }, { wch: 24 }, ...Array(8).fill({ wch: 11 })];
+  XLSX.utils.book_append_sheet(wb, ws, 'Resumen del partido');
+  const wh = XLSX.utils.aoa_to_sheet([r.histHead, ...r.history]); wh['!cols'] = [{ wch: 8 }, { wch: 20 }, { wch: 24 }, { wch: 32 }, { wch: 12 }, { wch: 10 }];
+  XLSX.utils.book_append_sheet(wb, wh, 'Historial');
+  const sh = (st.events || []).filter(e => (e.type === 'SHOT' || e.type === 'RIVAL_FG') && e.x !== undefined).map(e => ({ Cuarto: e.quarter, Equipo: tn(e, st), Jugador: e.playerName ? `#${e.playerNumber} ${e.playerName}` : '-', Valor: e.points + ' pts', Resultado: e.isMade ? 'Anotado' : 'Fallado', Momento: e.phase || '-', 'TL conv.': e.ftMade || 0, 'TL fall.': e.ftMissed || 0, 'X (%)': +e.x, 'Y (%)': +e.y }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sh.length ? sh : [{ Info: 'Sin tiros ubicados en el mapa' }]), 'Tiros (coordenadas)');
+  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  await deliverFile(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), exportName(st, 'xlsx'), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+}
+function drawCourt(doc, x0, y0, w, shots, square) {
+  const k = w / 500, h = 470 * k, P = (cx, cy) => [x0 + cx * k, y0 + cy * k];
+  doc.setDrawColor(100, 116, 139); doc.setLineWidth(0.3);
+  doc.rect(x0 + 5 * k, y0 + 5 * k, 490 * k, 460 * k); doc.rect(x0 + 170 * k, y0 + 5 * k, 160 * k, 190 * k);
+  doc.circle(...P(250, 190), 60 * k); doc.line(...P(220, 20), ...P(280, 20));
+  doc.setDrawColor(249, 115, 22); doc.circle(...P(250, 32), 9 * k);
+  doc.setDrawColor(99, 102, 241); doc.setLineWidth(0.5);
+  const pts = []; for (let i = 0; i <= 40; i++) { const a = Math.PI - Math.PI * i / 40; pts.push(P(250 + 220 * Math.cos(a), 90 + 220 * Math.sin(a))); }
+  doc.line(...P(30, 5), ...P(30, 90)); for (let i = 0; i < pts.length - 1; i++) doc.line(...pts[i], ...pts[i + 1]); doc.line(...P(470, 90), ...P(470, 5));
+  shots.forEach(s => {
+    const px = x0 + (+s.x) / 100 * w, py = y0 + (+s.y) / 100 * h;
+    doc.setFillColor(...(s.isMade ? [16, 185, 129] : [244, 63, 94]));
+    if (square) doc.rect(px - 1.6, py - 1.6, 3.2, 3.2, 'F'); else doc.circle(px, py, 1.7, 'F');
   });
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ps), 'Jugadores');
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(shots.map(s => ({ Cuarto: s.quarter, Dorsal: `#${s.playerNumber}`, Jugador: s.playerName, Valor: `${s.points} Puntos`, Resultado: s.isMade ? 'Anotado' : 'Fallado', Fase: s.phase, 'TL Conv.': s.ftMade || 0, 'TL Fallados': s.ftMissed || 0, 'X (%)': s.x, 'Y (%)': s.y }))), 'Tiros');
-  const rv = st.events.filter(e => e.type === 'RIVAL_FT' || e.type === 'RIVAL_FG' || e.type === 'TIMEOUT').map(e => ({ Cuarto: e.quarter, Equipo: tn(e, st), Jugador: e.playerName ? `#${e.playerNumber} ${e.playerName}` : '-', Fase: e.phase || '-', 'X (%)': e.x ?? '', 'Y (%)': e.y ?? '', Evento: e.type === 'RIVAL_FG' ? `Tiro de campo ${e.points}pt ${e.isMade ? 'anotado' : 'fallado'}` : e.type === 'RIVAL_FT' ? `TL ${e.origin === 'bonus' ? 'Bonus' : 'Por jugada'} ${e.isMade ? 'anotado' : 'fallado'}` : 'Tiempo muerto' }));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rv.length ? rv : [{ Info: 'Sin eventos' }]), 'Rival y T.M.');
-  const fts = st.events.filter(e => e.type === 'FT').map(e => ({ Cuarto: e.quarter, Jugador: e.playerName ? `#${e.playerNumber} ${e.playerName}` : 'Equipo', Origen: e.origin === 'bonus' ? 'Bonus' : 'Por jugada', Resultado: e.isMade ? 'Anotado' : 'Fallado' }));
-  if (fts.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(fts), 'TL sueltos');
-  const tos = st.events.filter(e => e.type === 'TURNOVER').map(e => ({ Cuarto: e.quarter, Jugador: e.playerName ? `#${e.playerNumber} ${e.playerName}` : 'Equipo', Situación: e.situation }));
-  if (tos.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tos), 'Pérdidas');
-  const rps = (st.rPlayers || []).map(p => {
-    const sh = st.events.filter(e => e.type === 'RIVAL_FG' && e.playerId === p.id), f = (pt, made) => sh.filter(e => e.points === pt && (!made || e.isMade)).length;
-    const fo = st.events.filter(e => e.type === 'RIVAL_FT' && e.playerId === p.id);
-    const ftm = sh.reduce((a, e) => a + (e.ftMade || 0), 0) + fo.filter(e => e.isMade).length;
-    return { Dorsal: `#${p.number}`, Nombre: p.name, Puntos: f(2, 1) * 2 + f(3, 1) * 3 + ftm, '2PT Conv.': f(2, 1), '2PT Int.': f(2), '3PT Conv.': f(3, 1), '3PT Int.': f(3), 'TL Conv.': ftm, 'TL Int.': ftm + sh.reduce((a, e) => a + (e.ftMissed || 0), 0) + fo.filter(e => !e.isMade).length, _n: sh.length + fo.length };
-  }).filter(r => r._n > 0).map(({ _n, ...r }) => r);
-  if (rps.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rps), 'Jugadores rival');
-  XLSX.writeFile(wb, `Partido_${(st.opp || 'rival').replace(/[^\w-]+/g, '_')}_${st.date || today()}.xlsx`);
+  return h;
+}
+async function exportPDF(st) {
+  if (!st) return;
+  const J = window.jspdf;
+  if (!J || !J.jsPDF) { alert('No se pudo cargar la librería de PDF. Abrí la app con internet una vez y probá de nuevo.'); return; }
+  const r = buildReport(st), doc = new J.jsPDF({ unit: 'mm', format: 'a4' }), W = 210, M = 12;
+  doc.setFontSize(15); doc.setTextColor(30, 41, 59); doc.text('CourtStats PRO', M, 14);
+  doc.setFontSize(9); doc.setTextColor(100); doc.text(r.sub, M, 19);
+  doc.setFontSize(17); doc.setTextColor(0); doc.text(`${r.my}  ${r.us} - ${r.them}  ${r.opp}`, W / 2, 30, { align: 'center' });
+  let y = 38;
+  const table = (title, head, body, foot, color) => {
+    if (y > 250) { doc.addPage(); y = 14; }
+    doc.setFontSize(10.5); doc.setTextColor(30, 41, 59); doc.text(title, M, y);
+    doc.autoTable({ startY: y + 2, head: [head], body, foot: foot ? [foot] : undefined, theme: 'grid', styles: { fontSize: 8, cellPadding: 1.4 },
+      headStyles: { fillColor: color || [30, 41, 59] }, footStyles: { fillColor: [226, 232, 240], textColor: 0, fontStyle: 'bold' }, margin: { left: M, right: M } });
+    y = doc.lastAutoTable.finalY + 7;
+  };
+  r.sections.forEach(s => table(s.title, s.head, s.body, s.foot, s.color));
+  doc.addPage(); doc.setFontSize(12); doc.setTextColor(30, 41, 59); doc.text('Mapa de tiro', M, 14);
+  const w = (W - 2 * M - 6) / 2, mine = r.shots.filter(e => e.type === 'SHOT'), theirs = r.shots.filter(e => e.type === 'RIVAL_FG');
+  doc.setFontSize(9);
+  doc.text(`${r.my}: ${mine.filter(e => e.isMade).length}/${mine.length} anotados (círculos)`, M, 22);
+  doc.text(`${r.opp}: ${theirs.filter(e => e.isMade).length}/${theirs.length} anotados (cuadrados)`, M + w + 6, 22);
+  drawCourt(doc, M, 25, w, mine, false); drawCourt(doc, M + w + 6, 25, w, theirs, true);
+  doc.setTextColor(100); doc.text('Verde: anotado · Rojo: fallado', M, 25 + w * 0.94 + 6);
+  doc.addPage(); y = 14; table('Historial del partido', r.histHead, r.history.length ? r.history : [['-', '-', '-', 'Sin eventos', '-', '-']]);
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120); doc.text(`CourtStats PRO · ${i}/${n}`, W / 2, 291, { align: 'center' }); }
+  await deliverFile(doc.output('blob'), exportName(st, 'pdf'), 'application/pdf');
 }
 
 // ---------- Versión, migraciones y respaldo ----------
 // Al publicar una mejora: subir APP_VERSION aquí y VERSION en sw.js.
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 // SCHEMA: versión del formato de los datos guardados. Si un cambio futuro altera ese formato,
 // se sube SCHEMA y se agrega en MIGRATIONS[n] una función que convierte los datos viejos.
 const SCHEMA = 1, LS_SCHEMA = 'courtstats_schema', LS_BACKUP = 'courtstats_lastbackup';

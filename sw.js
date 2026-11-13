@@ -1,6 +1,6 @@
 // CourtStats PRO - service worker
 // PARA PUBLICAR UNA ACTUALIZACIÓN: cambiá VERSION (v1 -> v2 -> v3...) y subí los archivos.
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CORE = 'courtstats-core-' + VERSION;
 const LIBS = 'courtstats-libs-v1'; // librerías con versión fija; cambiar el nombre solo si cambian sus URLs
 const CORE_FILES = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png'];
@@ -8,6 +8,8 @@ const LIB_NOCORS = [
   'https://cdn.tailwindcss.com/3.4.17',
   'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js',
   'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+  'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+  'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
 ];
 const LIB_CORS = ['https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/webfonts/fa-solid-900.woff2'];
