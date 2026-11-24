@@ -95,7 +95,10 @@
     </div>
 
     <div class="w-full lg:w-80 flex flex-col gap-4">
-      <button onclick="openTO()" class="w-full bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white font-extrabold text-lg py-4 rounded-xl shadow-xl flex items-center justify-center gap-3"><i class="fa-solid fa-triangle-exclamation text-xl"></i> PÉRDIDA</button>
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="openTO('us')" class="bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white font-extrabold py-3 rounded-xl shadow-xl leading-tight"><i class="fa-solid fa-triangle-exclamation text-lg"></i><span class="block text-base">PÉRDIDA</span><span class="block text-[10px] font-semibold opacity-90">nuestra</span></button>
+        <button onclick="openTO('them')" class="bg-rose-700 hover:bg-rose-600 active:bg-rose-800 text-white font-extrabold py-3 rounded-xl shadow-xl leading-tight"><i class="fa-solid fa-triangle-exclamation text-lg"></i><span class="block text-base">PÉRDIDA</span><span class="block text-[10px] font-semibold opacity-90">del rival</span></button>
+      </div>
       <div class="bg-slate-800 rounded-xl border border-slate-700 p-3 shadow-xl">
         <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider mb-1"><i class="fa-solid fa-bullseye text-amber-400"></i> Tiros libres sueltos</h3>
         <p class="text-[11px] text-slate-400 mb-2">Suma tiros libres <b>sin contar un tiro de campo</b> (por ejemplo, falta durante un tiro fallado). Se asignan al jugador seleccionado a los costados de la cancha.</p>
@@ -130,7 +133,7 @@
         <div class="space-y-2 text-xs" id="rphase-stats"></div>
         </div>
         <div class="mt-4 pt-3 border-t border-slate-700">
-          <div class="grid grid-cols-2 gap-2"><button onclick="exportXLSX(S)" class="bg-emerald-600 hover:bg-emerald-500 font-bold py-2 px-2 rounded-lg text-xs"><i class="fa-solid fa-file-excel text-base"></i> Excel</button><button onclick="exportPDF(S)" class="bg-rose-600 hover:bg-rose-500 font-bold py-2 px-2 rounded-lg text-xs"><i class="fa-solid fa-file-pdf text-base"></i> PDF</button></div>
+          <div class="grid grid-cols-2 gap-2"><button onclick="exportXLSX(S)" class="bg-emerald-600 hover:bg-emerald-500 font-bold py-2 px-2 rounded-lg text-xs"><i class="fa-solid fa-file-excel text-base"></i> Excel</button><button onclick="exportPDF(S)" class="bg-rose-600 hover:bg-rose-500 font-bold py-2 px-2 rounded-lg text-xs"><i class="fa-solid fa-file-pdf text-base"></i> PDF</button></div><button onclick="exportPDF(S,'H1')" class="w-full mt-2 bg-slate-700 hover:bg-slate-600 border border-slate-500 font-bold py-2 px-2 rounded-lg text-xs"><i class="fa-solid fa-file-pdf text-base text-rose-400"></i> PDF de entretiempo (1.er tiempo)</button>
         </div>
       </div>
     </div>
@@ -147,6 +150,10 @@
       <div class="h-64"><canvas id="chart-quarters"></canvas></div>
     </div>
     <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-xl md:col-span-2">
+      <h3 class="text-sm font-bold mb-3"><i class="fa-solid fa-chart-column text-emerald-400"></i> Puntos por momento: Nosotros vs Rival <span class="text-slate-400 font-normal text-xs">· incluye TL por jugada</span></h3>
+      <div class="h-64"><canvas id="chart-pts"></canvas></div>
+    </div>
+    <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-xl md:col-span-2">
       <h3 class="text-sm font-bold mb-3"><i class="fa-solid fa-triangle-exclamation text-orange-400"></i> Pérdidas por situación</h3>
       <div id="to-stats" class="space-y-1.5 text-xs"></div>
     </div>
@@ -159,6 +166,8 @@
   <!-- HISTORIAL -->
   <div id="tab-history" class="hidden bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-xl">
     <h3 class="text-sm font-bold mb-3"><i class="fa-solid fa-clock-rotate-left text-indigo-400"></i> Registro Evento por Evento</h3>
+    <input id="hist-search" type="search" oninput="renderHistory()" placeholder="Buscar: jugador, equipo, cuarto, fallado, bonus, fast break..." class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm mb-1">
+    <p id="hist-count" class="text-[11px] text-slate-400 mb-2"></p>
     <div class="overflow-x-auto">
       <table class="w-full text-left text-xs text-slate-300">
         <thead class="bg-slate-900/80 text-slate-400 uppercase font-semibold">
@@ -256,11 +265,27 @@
   </div>
 </div>
 
+<!-- MODAL EDITAR EVENTO -->
+<div id="edit-modal" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-3 hidden">
+  <div class="bg-slate-800 border border-slate-600 rounded-xl max-w-md w-full p-4 shadow-2xl space-y-3 max-h-[90vh] overflow-y-auto">
+    <div class="flex justify-between items-center border-b border-slate-700 pb-2">
+      <h3 class="text-sm font-bold"><i class="fa-solid fa-pen text-indigo-400"></i> <span id="edit-title">Editar evento</span></h3>
+      <button onclick="closeEdit()" class="text-slate-400 hover:text-white text-lg font-bold">&times;</button>
+    </div>
+    <div id="edit-body" class="space-y-3"></div>
+    <p class="text-[11px] text-slate-500">La posición del tiro en el mapa no se edita: si está mal ubicado, borralo y cargalo de nuevo.</p>
+    <div class="flex gap-2 pt-1">
+      <button onclick="closeEdit()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold py-2 rounded-lg">Cancelar</button>
+      <button onclick="saveEdit()" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-xs font-bold py-2 rounded-lg">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL PÉRDIDA -->
 <div id="to-modal" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-3 hidden">
   <div class="bg-slate-800 border border-slate-600 rounded-xl max-w-md w-full p-4 shadow-2xl space-y-3">
     <div class="flex justify-between items-center border-b border-slate-700 pb-2">
-      <h3 class="text-sm font-bold"><i class="fa-solid fa-triangle-exclamation text-orange-400"></i> Pérdida: ¿cómo fue?</h3>
+      <h3 class="text-sm font-bold"><i class="fa-solid fa-triangle-exclamation text-orange-400"></i> <span id="to-title">Pérdida: ¿cómo fue?</span></h3>
       <button onclick="closeTO()" class="text-slate-400 hover:text-white text-lg font-bold">&times;</button>
     </div>
     <div><label class="block text-xs font-semibold text-slate-300 mb-1">Jugador:</label><div id="to-players" class="grid grid-cols-3 gap-1.5"></div></div>
@@ -323,6 +348,7 @@ let teams = lsGet(LS_TEAMS, []);
 let tv = { team: null, player: null, phase: '' };
 const saveTeams = () => lsSet(LS_TEAMS, teams);
 const TURNOVERS = ['Robo Rival', 'Pérdida No Forzada', 'P&R', 'Fast Break', 'Camina', 'Foul Ofensivo', '24"'];
+const TURNOVERS_R = ['Robo Nuestro', ...TURNOVERS.slice(1)];
 let tempShot = null, viewAll = false, currentTab = 'court', phaseChart = null, quarterChart = null;
 
 // ---------- Marcador y tiempos muertos (derivados de los eventos) ----------
@@ -493,37 +519,81 @@ function renderMarkers() {
     && (viewAll || e.quarter === S.quarter) && (viewTeam === 'all' || (viewTeam === 'us') === (e.type === 'SHOT'))).map(s =>
     `<div class="shot-marker absolute ${s.type === 'SHOT' ? 'rounded-full' : 'rounded-md'} flex items-center justify-center text-[9px] font-bold text-white shadow-md border ${s.isMade ? 'bg-emerald-500 border-emerald-300 w-6 h-6' : 'bg-rose-500 border-rose-300 w-5 h-5 opacity-80'}" style="left:${s.x}%;top:${s.y}%">${esc(s.playerNumber)}</div>`).join('');
 }
-function phaseRows(type) {
+function phaseTotals(evs, type) {
   return PHASES.map(ph => {
-    const sh = S.events.filter(e => e.type === type && e.phase === ph), m = sh.filter(e => e.isMade).length, f = ftByPhase(S.events, type, ph);
+    const sh = evs.filter(e => e.type === type && e.phase === ph), m = sh.filter(e => e.isMade).length, f = ftByPhase(evs, type, ph);
     const pts = sh.reduce((a, e) => a + (e.isMade ? e.points : 0), 0);
-    return `<div class="bg-slate-900/60 p-2 rounded flex justify-between items-center"><span>${ph}</span><span class="text-right"><span class="font-bold ${type === 'SHOT' ? 'text-indigo-300' : 'text-rose-300'}">${sh.length ? String(+(pts / sh.length).toFixed(2)).replace('.', ',') : '0'} PPI</span> <span class="text-slate-400">(${m}/${sh.length})</span>${f.a ? ` <span class="text-amber-300/80">· TL ${f.m}/${f.a}</span>` : ''}</span></div>`;
-  }).join('');
+    return { ph, a: sh.length, m, pts, f, tot: pts + f.m, ppi: sh.length ? pts / sh.length : 0 };
+  });
+}
+function phaseRows(type) {
+  return phaseTotals(S.events, type).map(d => `<div class="bg-slate-900/60 p-2 rounded flex flex-wrap justify-between items-center gap-x-2"><span>${d.ph}</span><span class="text-right"><span class="font-bold ${type === 'SHOT' ? 'text-indigo-300' : 'text-rose-300'}">${d.a ? String(+(d.ppi).toFixed(2)).replace('.', ',') : '0'} PPI</span> <span class="text-slate-400">(${d.m}/${d.a})</span> <span class="text-emerald-300 font-bold">· ${d.tot} pts</span>${d.f.a ? ` <span class="text-amber-300/80">· TL ${d.f.m}/${d.f.a}</span>` : ''}</span></div>`).join('');
 }
 function renderPhaseStats() {
   $('phase-stats').innerHTML = phaseRows('SHOT'); $('rphase-stats').innerHTML = phaseRows('RIVAL_FG');
   $('my-phase-title').innerText = 'Ofensiva · ' + (S.myTeam || 'Mi Equipo'); $('rphase-title').innerText = 'Ofensiva · ' + (S.opp || 'Rival');
 }
+const norm = t => String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 function renderHistory() {
-  $('history-table-body').innerHTML = S.events.slice().reverse().map(e => {
-    let d = '';
-    if (e.type === 'SHOT') d = `${e.points}pt ${e.isMade ? 'Anotado' : 'Fallado'}${e.ftMade || e.ftMissed ? ` (TL ${e.ftMade}/${e.ftMade + e.ftMissed})` : ''}`;
-    else if (e.type === 'RIVAL_FT' || e.type === 'FT') d = `Tiro libre (${e.origin === 'bonus' ? 'Bonus' : 'Por jugada'})`;
-    else if (e.type === 'RIVAL_FG') d = `Tiro de campo ${e.points}pt ${e.isMade ? 'anotado' : 'fallado'}${e.ftMade || e.ftMissed ? ` (TL ${e.ftMade}/${e.ftMade + e.ftMissed})` : ''}`;
-    else if (e.type === 'TURNOVER') d = 'Pérdida: ' + esc(e.situation);
-    else d = e.description || '';
+  const q = norm($('hist-search').value || '').split(/\s+/).filter(Boolean), all = S.events.slice().reverse();
+  const rows = all.filter(e => {
+    if (!q.length) return true;
+    const hay = norm([e.quarter, tn(e, S), e.playerName ? `#${e.playerNumber} ${e.playerName}` : '', evDetail(e), e.phase || '', e.isMade === undefined ? '' : e.isMade ? 'acierto anotado' : 'fallo fallado'].join(' '));
+    return q.every(t => hay.includes(t));
+  });
+  $('hist-count').innerText = q.length ? `Mostrando ${rows.length} de ${all.length} eventos · tocá uno para editarlo` : `${all.length} eventos · tocá uno para editarlo`;
+  $('history-table-body').innerHTML = rows.map(e => {
     const res = e.isMade === undefined ? '-' : e.isMade ? 'Acierto' : 'Fallo';
-    return `<tr class="hover:bg-slate-700/50"><td class="p-2 font-bold text-indigo-400">${e.quarter}</td><td class="p-2 font-semibold">${esc(tn(e, S))}</td>
-      <td class="p-2">${e.playerName ? `#${esc(e.playerNumber)} ${esc(e.playerName)}` : '-'}</td><td class="p-2">${d}</td><td class="p-2 text-slate-400">${e.phase || '-'}</td>
+    return `<tr onclick="openEdit(${e.id})" class="cursor-pointer hover:bg-slate-700/50"><td class="p-2 font-bold text-indigo-400">${e.quarter}</td><td class="p-2 font-semibold">${esc(tn(e, S))}</td>
+      <td class="p-2">${e.playerName ? `#${esc(e.playerNumber)} ${esc(e.playerName)}` : '-'}</td><td class="p-2">${esc(evDetail(e))}</td><td class="p-2 text-slate-400">${e.phase || '-'}</td>
       <td class="p-2 font-bold ${e.isMade ? 'text-emerald-400' : e.isMade === false ? 'text-rose-400' : ''}">${res}</td>
-      <td class="p-2 text-right"><button onclick="deleteEvent(${e.id})" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-trash"></i></button></td></tr>`;
-  }).join('') || '<tr><td colspan="7" class="p-4 text-center text-slate-500">No hay eventos registrados.</td></tr>';
+      <td class="p-2 text-right whitespace-nowrap"><i class="fa-solid fa-pen text-indigo-300 mr-3"></i><button onclick="event.stopPropagation();deleteEvent(${e.id})" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-trash"></i></button></td></tr>`;
+  }).join('') || `<tr><td colspan="7" class="p-4 text-center text-slate-500">${all.length ? 'Ningún evento coincide con la búsqueda.' : 'No hay eventos registrados.'}</td></tr>`;
+}
+let editId = null;
+function openEdit(id) {
+  const e = S.events.find(x => x.id === id); if (!e) return;
+  editId = id;
+  const us = e.team === 'Mi Equipo', list = (us ? S.players : S.rPlayers) || [], cur = e.playerId == null ? '' : e.playerId;
+  const opt = (v, l, sel) => `<option value="${esc(v)}" ${String(sel) === String(v) ? 'selected' : ''}>${esc(l)}</option>`;
+  const sel = (idn, label, opts) => `<label class="block text-xs font-semibold text-slate-300">${label}<select id="${idn}" class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs font-normal text-slate-200">${opts}</select></label>`;
+  const num = (idn, label, v) => `<label class="block text-xs font-semibold text-slate-300">${label}<input id="${idn}" type="number" min="0" max="9" value="${v}" class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs font-normal text-slate-200"></label>`;
+  const isShot = e.type === 'SHOT' || e.type === 'RIVAL_FG', isFT = e.type === 'FT' || e.type === 'RIVAL_FT', isTO = e.type === 'TURNOVER' || e.type === 'RIVAL_TO';
+  const phases = opt('', 'Sin momento', e.phase || '') + PHASES.map(p => opt(p, p, e.phase || '')).join('');
+  let h = sel('ed-q', 'Cuarto', QUARTERS.map(q => opt(q, q, e.quarter)).join(''));
+  if (isShot || isFT || isTO) h += sel('ed-p', 'Jugador', opt('', 'Sin jugador / Equipo', cur) + list.map(p => opt(p.id, `#${p.number} - ${p.name}`, cur)).join(''));
+  if (isShot || isFT) h += sel('ed-res', 'Resultado', opt('1', 'Anotado', e.isMade ? '1' : '0') + opt('0', 'Fallado', e.isMade ? '1' : '0'));
+  if (isShot) h += sel('ed-pts', 'Valor del tiro', opt('2', '2 puntos', e.points) + opt('3', '3 puntos', e.points)) + sel('ed-phase', 'Momento de la ofensiva', phases)
+    + `<div class="grid grid-cols-2 gap-2">${num('ed-ftm', 'TL anotados de la jugada', e.ftMade || 0)}${num('ed-ftx', 'TL fallados de la jugada', e.ftMissed || 0)}</div>`;
+  if (isFT) h += sel('ed-origin', 'Origen del tiro libre', opt('shooting', 'Por jugada', e.origin === 'bonus' ? 'bonus' : 'shooting') + opt('bonus', 'Por bonus', e.origin === 'bonus' ? 'bonus' : 'shooting')) + sel('ed-phase', 'Momento (solo "por jugada")', phases);
+  if (isTO) h += sel('ed-sit', 'Situación', (us ? TURNOVERS : TURNOVERS_R).map(t => opt(t, t, e.situation)).join(''));
+  $('edit-title').innerText = `${tn(e, S)}: ${evDetail(e)}`;
+  $('edit-body').innerHTML = h;
+  $('edit-modal').classList.remove('hidden');
+}
+function closeEdit() { $('edit-modal').classList.add('hidden'); editId = null; }
+function saveEdit() {
+  const e = S.events.find(x => x.id === editId); if (!e) { closeEdit(); return; }
+  const g = id => { const el = $(id); return el ? el.value : undefined; };
+  e.quarter = g('ed-q');
+  const pid = g('ed-p');
+  if (pid !== undefined) {
+    const p = pid === '' ? null : ((e.team === 'Mi Equipo' ? S.players : S.rPlayers) || []).find(x => x.id === +pid);
+    e.playerId = p ? p.id : null; e.playerPid = p ? p.pid : undefined; e.playerNumber = p ? p.number : undefined; e.playerName = p ? p.name : undefined;
+  }
+  if (g('ed-res') !== undefined) e.isMade = g('ed-res') === '1';
+  if (g('ed-pts') === '2' || g('ed-pts') === '3') e.points = +g('ed-pts');
+  if (g('ed-phase') !== undefined) { if (g('ed-phase')) e.phase = g('ed-phase'); else delete e.phase; }
+  if (g('ed-ftm') !== undefined) { e.ftMade = Math.max(0, +g('ed-ftm') || 0); e.ftMissed = Math.max(0, +g('ed-ftx') || 0); }
+  if (g('ed-origin') !== undefined) { e.origin = g('ed-origin'); if (e.origin === 'bonus') delete e.phase; }
+  if (g('ed-sit') !== undefined) e.situation = g('ed-sit');
+  closeEdit(); updateUI();
 }
 // ---------- Box score ----------
 const emptyAgg = () => ({ pts: 0, fgp: 0, fgm: 0, fga: 0, m2: 0, a2: 0, m3: 0, a3: 0, ftm: 0, fta: 0, to: 0, n: 0 });
 function addEv(a, e) {
   a.n++;
-  if (e.type === 'TURNOVER') { a.to++; return; }
+  if (e.type === 'TURNOVER' || e.type === 'RIVAL_TO') { a.to++; return; }
   if (e.type === 'RIVAL_FT' || e.type === 'FT') { a.fta++; if (e.isMade) { a.ftm++; a.pts++; } return; }
   a.fga++; if (e.points === 3) a.a3++; else a.a2++;
   if (e.isMade) { a.fgm++; a.fgp += e.points; a.pts += e.points; if (e.points === 3) a.m3++; else a.m2++; }
@@ -536,11 +606,11 @@ function boxRow(num, name, a, cls, showTO) {
   return `<tr class="${cls || 'hover:bg-slate-700/50'}"><td class="p-2 font-bold text-indigo-300 whitespace-nowrap">${num}</td><td class="p-2 whitespace-nowrap">${name}</td><td class="p-2 text-right font-extrabold">${a.pts}</td>
     <td class="p-2 text-right whitespace-nowrap">${a.fgm}/${a.fga}</td><td class="p-2 text-right text-slate-400">${a.fga ? Math.round(a.fgm / a.fga * 100) + '%' : '-'}</td>
     <td class="p-2 text-right whitespace-nowrap">${a.m2}/${a.a2}</td><td class="p-2 text-right whitespace-nowrap">${a.m3}/${a.a3}</td><td class="p-2 text-right whitespace-nowrap">${a.ftm}/${a.fta}</td>
-    <td class="p-2 text-right font-semibold text-indigo-300">${ppiF(a.fgp, a.fga)}</td><td class="p-2 text-right">${showTO ? a.to : '-'}</td></tr>`;
+    <td class="p-2 text-right font-semibold text-indigo-300">${ppiF(a.fgp, a.fga)}</td><td class="p-2 text-right">${a.to}</td></tr>`;
 }
 function boxTable(t) {
   const us = t === 'us', list = us ? S.players : S.rPlayers;
-  const evs = S.events.filter(e => us ? (e.type === 'SHOT' || e.type === 'TURNOVER' || e.type === 'FT') : (e.type === 'RIVAL_FG' || e.type === 'RIVAL_FT'));
+  const evs = S.events.filter(e => us ? (e.type === 'SHOT' || e.type === 'TURNOVER' || e.type === 'FT') : (e.type === 'RIVAL_FG' || e.type === 'RIVAL_FT' || e.type === 'RIVAL_TO'));
   const tot = emptyAgg(), rows = [];
   list.forEach(p => {
     const a = emptyAgg(); evs.filter(e => e.playerId === p.id).forEach(e => addEv(a, e));
@@ -561,7 +631,7 @@ function renderBox() {
   const sc = scores(S);
   $('tab-box').innerHTML = `<div class="text-center text-sm font-bold bg-slate-800 rounded-xl border border-slate-700 py-2"><span class="text-indigo-300">${esc(S.myTeam || 'Mi Equipo')}</span> <span class="text-xl mx-2">${sc.us} - ${sc.them}</span> <span class="text-rose-300">${esc(S.opp || 'Rival')}</span></div>`
     + boxTable('us') + boxTable('them')
-    + '<p class="text-[11px] text-slate-500">TC: tiros de campo · PPI: puntos de tiros de campo por intento · PÉR: pérdidas (solo se registran las de tu equipo) · PTS incluye los tiros libres de cada jugada.</p>';
+    + '<p class="text-[11px] text-slate-500">TC: tiros de campo · PPI: puntos de tiros de campo por intento · PÉR: pérdidas · PTS incluye los tiros libres de cada jugada.</p>';
 }
 
 // ---------- Tiros libres sueltos ----------
@@ -596,26 +666,31 @@ function renderFTStats() {
 }
 
 // ---------- Pérdidas ----------
-let toPlayer = null;
-function openTO() { toPlayer = S.selected || null; renderTO(); $('to-modal').classList.remove('hidden'); }
+let toPlayer = null, toTeam = 'us';
+function openTO(team) { toTeam = team || 'us'; toPlayer = (toTeam === 'us' ? S.selected : S.rSelected) || null; renderTO(); $('to-modal').classList.remove('hidden'); }
 function setTOPlayer(id) { toPlayer = id; renderTO(); }
 function renderTO() {
-  $('to-players').innerHTML = S.onCourt.map(id => {
-    const p = S.players.find(x => x.id === id); if (!p) return '';
+  const us = toTeam === 'us', list = us ? S.players : S.rPlayers, on = us ? S.onCourt : S.rOnCourt, sit = us ? TURNOVERS : TURNOVERS_R;
+  $('to-title').innerText = `Pérdida de ${us ? (S.myTeam || 'Mi Equipo') : (S.opp || 'Rival')}: ¿cómo fue?`;
+  $('to-players').innerHTML = on.map(id => {
+    const p = list.find(x => x.id === id); if (!p) return '';
     return `<button onclick="setTOPlayer(${id})" class="p-1.5 rounded border text-xs text-left ${toPlayer === id ? 'bg-indigo-600 border-indigo-300 text-white' : 'bg-slate-900 border-slate-600'}"><b>#${esc(p.number)}</b><span class="block truncate text-[10px]">${esc(p.name)}</span></button>`;
   }).join('') + `<button onclick="setTOPlayer(null)" class="p-1.5 rounded border text-xs ${toPlayer === null ? 'bg-slate-600 border-slate-300 text-white' : 'bg-slate-900 border-slate-600 text-slate-400'}">Equipo</button>`;
-  $('to-options').innerHTML = TURNOVERS.map((t, i) => `<button onclick="addTurnover(${i})" class="p-2.5 rounded-lg border border-amber-700 bg-amber-900/40 hover:bg-amber-800/60 text-xs font-bold text-amber-100">${esc(t)}</button>`).join('');
+  $('to-options').innerHTML = sit.map((t, i) => `<button onclick="addTurnover(${i})" class="p-2.5 rounded-lg border border-amber-700 bg-amber-900/40 hover:bg-amber-800/60 text-xs font-bold text-amber-100">${esc(t)}</button>`).join('');
 }
 function addTurnover(i) {
-  const p = toPlayer ? S.players.find(x => x.id === toPlayer) : null;
-  S.events.push({ id: uid(), quarter: S.quarter, team: 'Mi Equipo', type: 'TURNOVER', situation: TURNOVERS[i], playerId: p ? p.id : null, playerPid: p ? p.pid : undefined, playerNumber: p ? p.number : undefined, playerName: p ? p.name : undefined });
+  const us = toTeam === 'us', p = toPlayer ? (us ? S.players : S.rPlayers).find(x => x.id === toPlayer) : null;
+  S.events.push({ id: uid(), quarter: S.quarter, team: us ? 'Mi Equipo' : 'Rival', type: us ? 'TURNOVER' : 'RIVAL_TO', situation: (us ? TURNOVERS : TURNOVERS_R)[i],
+    playerId: p ? p.id : null, playerPid: p ? p.pid : undefined, playerNumber: p ? p.number : undefined, playerName: p ? p.name : undefined });
   closeTO(); updateUI();
 }
 function closeTO() { $('to-modal').classList.add('hidden'); }
+function toBlock(type, list, name, tcls, bcls) {
+  const c = list.map(t => S.events.filter(e => e.type === type && e.situation === t).length), tot = c.reduce((a, b) => a + b, 0), mx = Math.max(1, ...c);
+  return `<p class="font-bold ${tcls} pt-2">${esc(name)} <span class="text-slate-400 font-normal">· total ${tot}</span></p>` + list.map((t, i) => `<div class="flex items-center gap-2"><span class="w-36 shrink-0 text-slate-300">${esc(t)}</span><div class="flex-1 bg-slate-900 rounded h-4 overflow-hidden"><div class="${bcls} h-4" style="width:${c[i] / mx * 100}%"></div></div><span class="w-16 text-right font-bold">${c[i]}${tot ? ` (${Math.round(c[i] / tot * 100)}%)` : ''}</span></div>`).join('');
+}
 function renderTOStats() {
-  const c = TURNOVERS.map(t => S.events.filter(e => e.type === 'TURNOVER' && e.situation === t).length), tot = c.reduce((a, b) => a + b, 0), mx = Math.max(1, ...c);
-  $('to-stats').innerHTML = TURNOVERS.map((t, i) => `<div class="flex items-center gap-2"><span class="w-36 shrink-0 text-slate-300">${esc(t)}</span><div class="flex-1 bg-slate-900 rounded h-4 overflow-hidden"><div class="bg-amber-500 h-4" style="width:${c[i] / mx * 100}%"></div></div><span class="w-16 text-right font-bold">${c[i]}${tot ? ` (${Math.round(c[i] / tot * 100)}%)` : ''}</span></div>`).join('')
-    + `<p class="text-[11px] text-slate-400 pt-1">Total de pérdidas de ${esc(S.myTeam || 'Mi Equipo')}: <b>${tot}</b></p>`;
+  $('to-stats').innerHTML = toBlock('TURNOVER', TURNOVERS, S.myTeam || 'Mi Equipo', 'text-indigo-300', 'bg-amber-500') + toBlock('RIVAL_TO', TURNOVERS_R, S.opp || 'Rival', 'text-rose-300', 'bg-rose-500');
 }
 
 // ---------- Equipos ----------
@@ -634,7 +709,7 @@ function phaseOf(evs) {
 function playerStatsMap(tid) {
   const map = {};
   gamesForStats().forEach((g, gi) => (g.events || []).forEach(e => {
-    const side = (e.type === 'SHOT' || e.type === 'TURNOVER' || e.type === 'FT') ? 'us' : (e.type === 'RIVAL_FG' || e.type === 'RIVAL_FT') ? 'them' : null;
+    const side = (e.type === 'SHOT' || e.type === 'TURNOVER' || e.type === 'FT') ? 'us' : (e.type === 'RIVAL_FG' || e.type === 'RIVAL_FT' || e.type === 'RIVAL_TO') ? 'them' : null;
     if (!side || !e.playerPid || (side === 'us' ? g.myTeamId : g.oppTeamId) !== tid) return;
     const m = map[e.playerPid] || (map[e.playerPid] = { evs: [], games: new Set() });
     m.evs.push(e); m.games.add(gi);
@@ -826,6 +901,7 @@ function deleteGame(id) {
 }
 
 // ---------- Gráficos ----------
+let ptsChart = null;
 const barLabels = { id: 'barLabels', afterDatasetsDraw(chart) {
   const meta = chart.$meta2; if (!meta) return;
   const ctx = chart.ctx, base = chart.scales.y.getPixelForValue(0);
@@ -843,6 +919,8 @@ function initCharts() {
   phaseChart = new Chart($('chart-phases'), { type: 'bar', plugins: [barLabels],
     data: { labels: PHASES, datasets: [{ label: 'Nosotros (PPI)', data: [], backgroundColor: '#6366f1' }, { label: 'Rival (PPI)', data: [], backgroundColor: '#f43f5e' }] },
     options: { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 30 } }, scales: { y: { min: 0, suggestedMax: 3, title: { display: true, text: 'Puntos por intento' } } } } });
+  ptsChart = new Chart($('chart-pts'), { type: 'bar', data: { labels: PHASES, datasets: [{ label: 'Nosotros (pts)', data: [], backgroundColor: '#6366f1' }, { label: 'Rival (pts)', data: [], backgroundColor: '#f43f5e' }] },
+    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: 'Puntos' } } } } });
   quarterChart = new Chart($('chart-quarters'), { type: 'line',
     data: { labels: QUARTERS, datasets: [{ label: 'Nosotros eFG%', data: [], borderColor: '#6366f1', tension: 0.3 }, { label: 'Rival eFG%', data: [], borderColor: '#f43f5e', tension: 0.3 }] },
     options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, suggestedMax: 100, title: { display: true, text: 'eFG%' } } } } });
@@ -861,6 +939,7 @@ function updateCharts() {
   phaseChart.data.datasets[0].data = us.map(d => +d.ppi.toFixed(2));
   phaseChart.data.datasets[1].data = th.map(d => +d.ppi.toFixed(2));
   phaseChart.update();
+  if (ptsChart) { ptsChart.data.datasets[0].data = phaseTotals(S.events, 'SHOT').map(d => d.tot); ptsChart.data.datasets[1].data = phaseTotals(S.events, 'RIVAL_FG').map(d => d.tot); ptsChart.update(); }
   const pct = type => QUARTERS.map(q => { const qs = S.events.filter(e => e.type === type && e.quarter === q); if (!qs.length) return 0; const pts = qs.reduce((a, e) => a + (e.isMade ? e.points : 0), 0); return Math.round(pts / (2 * qs.length) * 1000) / 10; });
   quarterChart.data.datasets[0].data = pct('SHOT');
   quarterChart.data.datasets[1].data = pct('RIVAL_FG');
@@ -877,52 +956,91 @@ async function deliverFile(blob, name, type) {
   const url = URL.createObjectURL(blob), a = document.createElement('a');
   a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
-const exportName = (st, ext) => `${(st.myTeam || 'MiEquipo')}_vs_${(st.opp || 'Rival')}_${st.date || today()}.${ext}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.-]+/g, '_');
+const exportName = (st, ext, suf = '') => `${(st.myTeam || 'MiEquipo')}_vs_${(st.opp || 'Rival')}_${st.date || today()}${suf}.${ext}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.-]+/g, '_');
 function evDetail(e) {
   if (e.type === 'SHOT' || e.type === 'RIVAL_FG') return `${e.points}pt ${e.isMade ? 'anotado' : 'fallado'}${e.ftMade || e.ftMissed ? ` (TL ${e.ftMade}/${e.ftMade + e.ftMissed})` : ''}`;
   if (e.type === 'RIVAL_FT' || e.type === 'FT') return `Tiro libre (${e.origin === 'bonus' ? 'Bonus' : 'Por jugada'})`;
-  if (e.type === 'TURNOVER') return 'Pérdida: ' + e.situation;
+  if (e.type === 'TURNOVER' || e.type === 'RIVAL_TO') return 'Pérdida: ' + e.situation;
   return e.description || '';
 }
 function boxData(st, us) {
   const list = (us ? st.players : st.rPlayers) || [], tot = emptyAgg(), rows = [];
-  const evs = st.events.filter(e => us ? (e.type === 'SHOT' || e.type === 'TURNOVER' || e.type === 'FT') : (e.type === 'RIVAL_FG' || e.type === 'RIVAL_FT'));
-  const line = (n, name, a) => [n, name, a.pts, `${a.fgm}/${a.fga}`, a.fga ? Math.round(a.fgm / a.fga * 100) + '%' : '-', `${a.m2}/${a.a2}`, `${a.m3}/${a.a3}`, `${a.ftm}/${a.fta}`, ppiF(a.fgp, a.fga), us ? a.to : '-'];
+  const evs = st.events.filter(e => us ? (e.type === 'SHOT' || e.type === 'TURNOVER' || e.type === 'FT') : (e.type === 'RIVAL_FG' || e.type === 'RIVAL_FT' || e.type === 'RIVAL_TO'));
+  const line = (n, name, a) => [n, name, a.pts, `${a.fgm}/${a.fga}`, a.fga ? Math.round(a.fgm / a.fga * 100) + '%' : '-', `${a.m2}/${a.a2}`, `${a.m3}/${a.a3}`, `${a.ftm}/${a.fta}`, ppiF(a.fgp, a.fga), a.to];
   list.forEach(p => { const a = emptyAgg(); evs.filter(e => e.playerId === p.id).forEach(e => addEv(a, e)); if (a.n) { addAgg(tot, a); rows.push(line('#' + p.number, p.name, a)); } });
   const ua = emptyAgg(); evs.filter(e => e.playerId == null).forEach(e => addEv(ua, e));
   if (ua.n) { addAgg(tot, ua); rows.push(line('-', 'Sin jugador asignado', ua)); }
   return { body: rows, foot: line('', 'TOTAL', tot) };
 }
-function buildReport(st) {
-  const my = st.myTeam || 'Mi Equipo', opp = st.opp || 'Rival', ev = st.events, sc = scores(st);
-  const qs = QUARTERS.filter(q => q !== 'OT' || ev.some(e => e.quarter === 'OT'));
+const f1 = n => String(+n.toFixed(2)).replace('.', ','), sgn = n => (n > 0 ? '+' : '') + f1(n), pc = (m, a) => a ? Math.round(m / a * 100) + '%' : '-';
+function buildReport(st, period) {
+  const my = st.myTeam || 'Mi Equipo', opp = st.opp || 'Rival', H1 = period === 'H1';
+  const ev = H1 ? st.events.filter(e => e.quarter === 'Q1' || e.quarter === 'Q2') : st.events, sx = { ...st, events: ev }, sc = scores(sx);
+  const qs = QUARTERS.filter(q => H1 ? (q === 'Q1' || q === 'Q2') : (q !== 'OT' || ev.some(e => e.quarter === 'OT')));
   const qsc = qs.map(q => scores({ events: ev.filter(e => e.quarter === q) }));
   const BOXH = ['#', 'Jugador', 'PTS', 'TC', 'TC%', '2P', '3P', 'TL', 'PPI', 'PÉR'];
-  const bu = boxData(st, true), br = boxData(st, false);
-  const pa = type => PHASES.map(ph => { const sh = ev.filter(e => e.type === type && e.phase === ph), pts = sh.reduce((x, e) => x + (e.isMade ? e.points : 0), 0), f = ftByPhase(ev, type, ph); return [ppiF(pts, sh.length), `${sh.filter(e => e.isMade).length}/${sh.length}`, f.a ? `${f.m}/${f.a}` : '-']; });
-  const A = pa('SHOT'), B = pa('RIVAL_FG');
+  const bu = boxData(sx, true), br = boxData(sx, false), PU = phaseTotals(ev, 'SHOT'), PR = phaseTotals(ev, 'RIVAL_FG');
+  const TY = { us: ['SHOT', 'FT', 'TURNOVER'], them: ['RIVAL_FG', 'RIVAL_FT', 'RIVAL_TO'] };
+  const teamAgg = us => { const a = emptyAgg(); ev.filter(e => TY[us ? 'us' : 'them'].includes(e.type)).forEach(e => addEv(a, e)); return a; };
+  const AU = teamAgg(true), AR = teamAgg(false);
+  const paint = type => ev.filter(e => e.type === type && e.isMade && e.points === 2 && e.x !== undefined && +e.x * 5 >= 170 && +e.x * 5 <= 330 && +e.y * 4.7 <= 195).length * 2;
+  const two = (f) => [f(AU), f(AR)];
+  const summary = [['Puntos', sc.us, sc.them], ['Tiros de campo', ...two(a => `${a.fgm}/${a.fga} (${pc(a.fgm, a.fga)})`)], ['eFG%', efgF(AU), efgF(AR)], ['PPI (tiros de campo)', ppiF(AU.fgp, AU.fga), ppiF(AR.fgp, AR.fga)],
+    ['Triples', ...two(a => `${a.m3}/${a.a3} (${pc(a.m3, a.a3)})`)], ['Tiros libres', ...two(a => `${a.ftm}/${a.fta} (${pc(a.ftm, a.fta)})`)],
+    ['Puntos de 2 / de 3 / de TL', ...two(a => `${a.m2 * 2} / ${a.m3 * 3} / ${a.ftm}`)], ['Puntos en la pintura (tiros ubicados)', paint('SHOT'), paint('RIVAL_FG')], ['Pérdidas', AU.to, AR.to]];
+  const scorers = us => {
+    const list = (us ? st.players : st.rPlayers) || [], evs = ev.filter(e => TY[us ? 'us' : 'them'].slice(0, 2).includes(e.type));
+    return list.map(p => { const a = emptyAgg(); evs.filter(e => e.playerId === p.id).forEach(e => addEv(a, e)); return { p, a }; }).filter(x => x.a.pts > 0).sort((x, y) => y.a.pts - x.a.pts).slice(0, 5);
+  };
+  const SCH = ['#', 'Jugador', 'PTS', 'TC', 'TC%', 'eFG%', '3P', 'TL', 'PPI'];
+  const scRows = arr => arr.length ? arr.map(({ p, a }) => ['#' + p.number, p.name, a.pts, `${a.fgm}/${a.fga}`, pc(a.fgm, a.fga), efgF(a), `${a.m3}/${a.a3}`, `${a.ftm}/${a.fta}`, ppiF(a.fgp, a.fga)]) : [['-', 'Sin puntos registrados', '', '', '', '', '', '', '']];
+  const SU = scorers(true), SR = scorers(false), TA = PU.reduce((x, d) => x + d.a, 0), TB = PR.reduce((x, d) => x + d.a, 0);
+  const attack = PHASES.map((ph, i) => { const u = PU[i], r = PR[i]; return [ph, `${u.a} (${pc(u.a, TA)})`, u.tot, u.a ? f1(u.ppi) : '-', u.f.a ? `${u.f.m}/${u.f.a}` : '-', `${r.a} (${pc(r.a, TB)})`, r.tot, r.a ? f1(r.ppi) : '-', r.f.a ? `${r.f.m}/${r.f.a}` : '-', u.a && r.a ? sgn(u.ppi - r.ppi) : '-']; });
   const efg = type => qs.map(q => { const x = ev.filter(e => e.type === type && e.quarter === q); return x.length ? String(Math.round(x.reduce((a, e) => a + (e.isMade ? e.points : 0), 0) / (2 * x.length) * 1000) / 10).replace('.', ',') + '%' : '-'; });
-  const ftr = (name, o) => [name, `${o.play.m}/${o.play.a}`, `${o.bonus.m}/${o.bonus.a}`, `${o.play.m + o.bonus.m}/${o.play.a + o.bonus.a}`, (o.play.a + o.bonus.a) ? Math.round((o.play.m + o.bonus.m) / (o.play.a + o.bonus.a) * 100) + '%' : '-'];
-  const tc = TURNOVERS.map(t => ev.filter(e => e.type === 'TURNOVER' && e.situation === t).length), tt = tc.reduce((a, b) => a + b, 0);
+  const ftr = (name, o) => [name, `${o.play.m}/${o.play.a}`, `${o.bonus.m}/${o.bonus.a}`, `${o.play.m + o.bonus.m}/${o.play.a + o.bonus.a}`, pc(o.play.m + o.bonus.m, o.play.a + o.bonus.a)];
+  const cnt = (type, list) => list.map(t => ev.filter(e => e.type === type && e.situation === t).length), cu = cnt('TURNOVER', TURNOVERS), cr = cnt('RIVAL_TO', TURNOVERS_R);
+  // lectura rápida
+  const ins = [];
+  if (qs.length > 1) ins.push(`Parciales de ${my}: ` + qs.map((q, i) => `${q} ${sgn(qsc[i].us - qsc[i].them)}`).join(' · '));
+  [[my, PU, TA], [opp, PR, TB]].forEach(([n, ps, t]) => {
+    const b = ps.filter(d => d.a >= 2).sort((x, y) => y.ppi - x.ppi)[0], m = ps.slice().sort((x, y) => y.a - x.a)[0];
+    if (b) ins.push(`Ataque más efectivo de ${n}: ${b.ph} (${f1(b.ppi)} PPI en ${b.a} tiros, ${b.tot} pts)`);
+    if (m && m.a) ins.push(`Ataque más usado de ${n}: ${m.ph} (${pc(m.a, t)} de sus tiros)`);
+  });
+  const dif = PHASES.map((ph, i) => ({ ph, d: PU[i].ppi - PR[i].ppi, ok: PU[i].a > 0 && PR[i].a > 0 })).filter(x => x.ok);
+  if (dif.length) {
+    const hi = dif.reduce((a, b) => b.d > a.d ? b : a), lo = dif.reduce((a, b) => b.d < a.d ? b : a);
+    if (hi.d > 0) ins.push(`Mayor ventaja de ${my}: ${hi.ph} (${sgn(hi.d)} PPI sobre ${opp})`);
+    if (lo.d < 0) ins.push(`Mayor ventaja de ${opp}: ${lo.ph} (${sgn(-lo.d)} PPI sobre ${my})`);
+  }
+  [[my, SU], [opp, SR]].forEach(([n, arr]) => { if (arr.length) ins.push(`Goleador de ${n}: #${arr[0].p.number} ${arr[0].p.name} (${arr[0].a.pts} pts, TC ${arr[0].a.fgm}/${arr[0].a.fga}, eFG% ${efgF(arr[0].a)})`); });
+  ins.push(`Triples: ${my} ${AU.m3}/${AU.a3} (${pc(AU.m3, AU.a3)}) · ${opp} ${AR.m3}/${AR.a3} (${pc(AR.m3, AR.a3)})`, `Tiros libres: ${my} ${AU.ftm}/${AU.fta} · ${opp} ${AR.ftm}/${AR.fta}`);
+  const top = (c, list) => { const m = Math.max(...c); return m ? ' (más frecuente: ' + list[c.indexOf(m)] + ')' : ''; };
+  ins.push(`Pérdidas: ${my} ${AU.to}${top(cu, TURNOVERS)} · ${opp} ${AR.to}${top(cr, TURNOVERS_R)}`);
   const sections = [
+    { title: 'Resumen rápido', head: ['', my, opp], body: summary },
     { title: 'Marcador por cuarto', head: ['Equipo', ...qs, 'Total'], body: [[my, ...qsc.map(x => x.us), sc.us], [opp, ...qsc.map(x => x.them), sc.them]] },
+    { title: 'Goleadores - ' + my, head: SCH, body: scRows(SU), color: [79, 70, 229] },
+    { title: 'Goleadores - ' + opp, head: SCH, body: scRows(SR), color: [225, 29, 72] },
+    { title: 'Tipos de ataque: puntos y eficiencia por momento', head: ['Momento', my + ' tiros', 'Pts', 'PPI', 'TL', opp + ' tiros', 'Pts', 'PPI', 'TL', 'Dif. PPI'], body: attack,
+      note: `Pts incluye los TL por jugada del momento. PPI cuenta solo tiros de campo. Dif. PPI = ${my} menos ${opp} (positivo: ventaja de ${my}).` },
     { title: 'Box score - ' + my, head: BOXH, body: bu.body, foot: bu.foot, color: [79, 70, 229] },
     { title: 'Box score - ' + opp, head: BOXH, body: br.body, foot: br.foot, color: [225, 29, 72] },
-    { title: 'Eficiencia ofensiva por momento (PPI y TL por jugada)', head: ['Momento', my + ' PPI', 'Acier./Int.', 'TL', opp + ' PPI', 'Acier./Int.', 'TL'], body: PHASES.map((ph, i) => [ph, ...A[i], ...B[i]]) },
     { title: 'eFG% por cuarto', head: ['Equipo', ...qs], body: [[my, ...efg('SHOT')], [opp, ...efg('RIVAL_FG')]] },
     { title: 'Tiros libres: por jugada vs bonus', head: ['Equipo', 'Por jugada', 'Bonus', 'Total', '%'], body: [ftr(my, ftAgg(true, ev)), ftr(opp, ftAgg(false, ev))] },
-    { title: 'Pérdidas por situación - ' + my, head: ['Situación', 'Cantidad', '%'], body: TURNOVERS.map((t, i) => [t, tc[i], tt ? Math.round(tc[i] / tt * 100) + '%' : '-']), foot: ['Total', tt, ''] },
+    { title: 'Pérdidas por situación', head: ['Situación', my, '%', opp, '%'], body: TURNOVERS.map((t, i) => [i === 0 ? 'Robo (del otro equipo)' : t, cu[i], pc(cu[i], AU.to), cr[i], pc(cr[i], AR.to)]), foot: ['Total', AU.to, '', AR.to, ''] },
   ];
   const history = ev.map(e => [e.quarter, tn(e, st), e.playerName ? `#${e.playerNumber} ${e.playerName}` : '-', evDetail(e), e.phase || '-', e.isMade === undefined ? '-' : e.isMade ? 'Acierto' : 'Fallo']);
   const shots = ev.filter(e => (e.type === 'SHOT' || e.type === 'RIVAL_FG') && e.x !== undefined);
-  return { my, opp, us: sc.us, them: sc.them, sub: `Fecha: ${st.date || ''}`, sections, history, histHead: ['Cuarto', 'Equipo', 'Jugador', 'Detalle', 'Fase', 'Resultado'], shots };
+  return { my, opp, us: sc.us, them: sc.them, kind: H1 ? 'Informe de entretiempo' : 'Informe del partido', sub: `Fecha: ${st.date || ''}${H1 ? ' · Primer tiempo (Q1 y Q2)' : ''}`, insights: ins, sections, history, histHead: ['Cuarto', 'Equipo', 'Jugador', 'Detalle', 'Fase', 'Resultado'], shots };
 }
 async function exportXLSX(st) {
   if (!st) return;
   const r = buildReport(st), rows = [[`${r.my}  ${r.us} - ${r.them}  ${r.opp}`], [r.sub], []];
-  r.sections.forEach(sec => { rows.push([sec.title.toUpperCase()], sec.head); sec.body.forEach(b => rows.push(b)); if (sec.foot) rows.push(sec.foot); rows.push([]); });
+  rows.push(['LECTURA RÁPIDA'], ...r.insights.map(t => [t]), []);
+  r.sections.forEach(sec => { rows.push([sec.title.toUpperCase()], sec.head); sec.body.forEach(b => rows.push(b)); if (sec.foot) rows.push(sec.foot); if (sec.note) rows.push([sec.note]); rows.push([]); });
   const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{ wch: 24 }, { wch: 24 }, ...Array(8).fill({ wch: 11 })];
+  ws['!cols'] = [{ wch: 30 }, { wch: 24 }, ...Array(8).fill({ wch: 12 })];
   XLSX.utils.book_append_sheet(wb, ws, 'Resumen del partido');
   const wh = XLSX.utils.aoa_to_sheet([r.histHead, ...r.history]); wh['!cols'] = [{ wch: 8 }, { wch: 20 }, { wch: 24 }, { wch: 32 }, { wch: 12 }, { wch: 10 }];
   XLSX.utils.book_append_sheet(wb, wh, 'Historial');
@@ -947,23 +1065,29 @@ function drawCourt(doc, x0, y0, w, shots, square) {
   });
   return h;
 }
-async function exportPDF(st) {
+async function exportPDF(st, period) {
   if (!st) return;
   const J = window.jspdf;
   if (!J || !J.jsPDF) { alert('No se pudo cargar la librería de PDF. Abrí la app con internet una vez y probá de nuevo.'); return; }
-  const r = buildReport(st), doc = new J.jsPDF({ unit: 'mm', format: 'a4' }), W = 210, M = 12;
-  doc.setFontSize(15); doc.setTextColor(30, 41, 59); doc.text('CourtStats PRO', M, 14);
+  const r = buildReport(st, period), doc = new J.jsPDF({ unit: 'mm', format: 'a4' }), W = 210, M = 12;
+  doc.setFontSize(15); doc.setTextColor(30, 41, 59); doc.text('CourtStats PRO · ' + r.kind, M, 14);
   doc.setFontSize(9); doc.setTextColor(100); doc.text(r.sub, M, 19);
   doc.setFontSize(17); doc.setTextColor(0); doc.text(`${r.my}  ${r.us} - ${r.them}  ${r.opp}`, W / 2, 30, { align: 'center' });
-  let y = 38;
-  const table = (title, head, body, foot, color) => {
-    if (y > 250) { doc.addPage(); y = 14; }
+  let y = 37;
+  doc.setFontSize(10.5); doc.setTextColor(30, 41, 59); doc.text('Lectura rápida', M, y); y += 5;
+  doc.setFontSize(8.5); doc.setTextColor(40);
+  r.insights.forEach(t => { const ln = doc.splitTextToSize('• ' + t, W - 2 * M); if (y + ln.length * 4 > 280) { doc.addPage(); y = 14; } doc.text(ln, M, y); y += ln.length * 4 + 0.8; });
+  y += 4;
+  const table = (title, head, body, foot, color, note) => {
+    if (y > 245) { doc.addPage(); y = 14; }
     doc.setFontSize(10.5); doc.setTextColor(30, 41, 59); doc.text(title, M, y);
     doc.autoTable({ startY: y + 2, head: [head], body, foot: foot ? [foot] : undefined, theme: 'grid', styles: { fontSize: 8, cellPadding: 1.4 },
       headStyles: { fillColor: color || [30, 41, 59] }, footStyles: { fillColor: [226, 232, 240], textColor: 0, fontStyle: 'bold' }, margin: { left: M, right: M } });
-    y = doc.lastAutoTable.finalY + 7;
+    y = doc.lastAutoTable.finalY + 6;
+    if (note) { const nl = doc.splitTextToSize(note, W - 2 * M); doc.setFontSize(7.5); doc.setTextColor(110); doc.text(nl, M, y - 1); y += nl.length * 3 + 2; }
+    y += 3;
   };
-  r.sections.forEach(s => table(s.title, s.head, s.body, s.foot, s.color));
+  r.sections.forEach(s2 => table(s2.title, s2.head, s2.body, s2.foot, s2.color, s2.note));
   doc.addPage(); doc.setFontSize(12); doc.setTextColor(30, 41, 59); doc.text('Mapa de tiro', M, 14);
   const w = (W - 2 * M - 6) / 2, mine = r.shots.filter(e => e.type === 'SHOT'), theirs = r.shots.filter(e => e.type === 'RIVAL_FG');
   doc.setFontSize(9);
@@ -974,12 +1098,12 @@ async function exportPDF(st) {
   doc.addPage(); y = 14; table('Historial del partido', r.histHead, r.history.length ? r.history : [['-', '-', '-', 'Sin eventos', '-', '-']]);
   const n = doc.getNumberOfPages();
   for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120); doc.text(`CourtStats PRO · ${i}/${n}`, W / 2, 291, { align: 'center' }); }
-  await deliverFile(doc.output('blob'), exportName(st, 'pdf'), 'application/pdf');
+  await deliverFile(doc.output('blob'), exportName(st, 'pdf', period === 'H1' ? '_1T' : ''), 'application/pdf');
 }
 
 // ---------- Versión, migraciones y respaldo ----------
 // Al publicar una mejora: subir APP_VERSION aquí y VERSION en sw.js.
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.5.0';
 // SCHEMA: versión del formato de los datos guardados. Si un cambio futuro altera ese formato,
 // se sube SCHEMA y se agrega en MIGRATIONS[n] una función que convierte los datos viejos.
 const SCHEMA = 1, LS_SCHEMA = 'courtstats_schema', LS_BACKUP = 'courtstats_lastbackup';
