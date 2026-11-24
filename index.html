@@ -32,6 +32,7 @@
   <div class="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between">
     <div class="flex items-center gap-3">
       <div>
+        <img id="my-crest" alt="" class="hidden w-6 h-6 object-contain mb-0.5">
         <span id="my-label" onclick="editTeamName('us')" title="Tocá para cambiar el nombre" class="text-xs uppercase font-bold text-indigo-400 block tracking-wider truncate max-w-[90px] cursor-pointer">Mi Equipo</span>
         <span id="score-us" class="text-3xl font-extrabold">0</span>
       </div>
@@ -52,7 +53,8 @@
         <button onclick="useTimeOut('them')" class="text-[10px] bg-rose-900/60 hover:bg-rose-800 text-rose-200 px-1.5 py-0.5 rounded border border-rose-700">Pedir T.M.</button>
       </div>
       <div class="text-right">
-        <span id="rival-label" onclick="editTeamName('them')" title="Tocá para cambiar el nombre" class="text-xs uppercase font-bold text-rose-400 block tracking-wider truncate max-w-[90px] cursor-pointer">Rival</span>
+        <img id="rival-crest" alt="" class="hidden w-6 h-6 object-contain mb-0.5">
+          <span id="rival-label" onclick="editTeamName('them')" title="Tocá para cambiar el nombre" class="text-xs uppercase font-bold text-rose-400 block tracking-wider truncate max-w-[90px] cursor-pointer">Rival</span>
         <span id="score-them" class="text-3xl font-extrabold">0</span>
       </div>
     </div>
@@ -325,7 +327,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const LS_CUR = 'courtstats_current', LS_GAMES = 'courtstats_games';
-const PHASES = ['Fast Break', 'Early Set', 'Late Clock', '2nd Chance'];
+const PHASES = ['Fast Break', 'Early Set', 'Late Clock', '2nd Chance', 'Salidas'];
 const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4', 'OT'];
 const MAX_TM = { H1: 2, H2: 3, OT: 1 };
 const half = q => q === 'OT' ? 'OT' : (q === 'Q1' || q === 'Q2') ? 'H1' : 'H2';
@@ -423,7 +425,7 @@ const playerPts = (id, t) => S.events.reduce((a, e) => {
 function panelHTML(t) {
   const us = t === 'us', list = us ? S.players : S.rPlayers, on = us ? S.onCourt : S.rOnCourt, selId = us ? S.selected : S.rSelected;
   const c = us ? ['bg-indigo-600 border-indigo-300', 'hover:border-indigo-400', 'text-indigo-100', 'text-indigo-300', 'text-indigo-400'] : ['bg-rose-600 border-rose-300', 'hover:border-rose-400', 'text-rose-100', 'text-rose-300', 'text-rose-400'];
-  return `<span class="hidden sm:block text-[10px] font-bold uppercase ${c[4]} text-center truncate">${esc(us ? (S.myTeam || 'Mi Equipo') : (S.opp || 'Rival'))}</span>` +
+  return `${crestImg(crestOf(t, S), 'hidden sm:block mx-auto w-8 h-8')}<span class="hidden sm:block text-[10px] font-bold uppercase ${c[4]} text-center truncate">${esc(us ? (S.myTeam || 'Mi Equipo') : (S.opp || 'Rival'))}</span>` +
     on.map(id => {
       const p = list.find(x => x.id === id); if (!p) return '';
       const sel = selId === id;
@@ -620,7 +622,7 @@ function boxTable(t) {
   if (ua.n) { addAgg(tot, ua); rows.push(boxRow('—', '<span class="text-slate-400 italic">Sin jugador asignado</span>', ua, '', us)); }
   const name = esc(us ? (S.myTeam || 'Mi Equipo') : (S.opp || 'Rival'));
   return `<div class="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-xl">
-    <h3 class="text-sm font-bold mb-3 ${us ? 'text-indigo-400' : 'text-rose-400'} uppercase tracking-wide">${name}</h3>
+    <h3 class="text-sm font-bold mb-3 ${us ? 'text-indigo-400' : 'text-rose-400'} uppercase tracking-wide">${crestImg(crestOf(us ? 'us' : 'them', S), 'inline w-6 h-6 mr-2 align-middle')}${name}</h3>
     <div class="overflow-x-auto"><table class="w-full text-left text-xs text-slate-300">
       <thead class="bg-slate-900/80 text-slate-400 uppercase font-semibold"><tr><th class="p-2">#</th><th class="p-2">Jugador</th><th class="p-2 text-right">PTS</th><th class="p-2 text-right">TC</th><th class="p-2 text-right">TC%</th><th class="p-2 text-right">2P</th><th class="p-2 text-right">3P</th><th class="p-2 text-right">TL</th><th class="p-2 text-right">PPI</th><th class="p-2 text-right">PÉR</th></tr></thead>
       <tbody class="divide-y divide-slate-700">${rows.join('') || '<tr><td colspan="10" class="p-4 text-center text-slate-500">Sin registros todavía.</td></tr>'}</tbody>
@@ -629,7 +631,7 @@ function boxTable(t) {
 }
 function renderBox() {
   const sc = scores(S);
-  $('tab-box').innerHTML = `<div class="text-center text-sm font-bold bg-slate-800 rounded-xl border border-slate-700 py-2"><span class="text-indigo-300">${esc(S.myTeam || 'Mi Equipo')}</span> <span class="text-xl mx-2">${sc.us} - ${sc.them}</span> <span class="text-rose-300">${esc(S.opp || 'Rival')}</span></div>`
+  $('tab-box').innerHTML = `<div class="text-center text-sm font-bold bg-slate-800 rounded-xl border border-slate-700 py-2">${crestImg(crestOf('us', S), 'inline w-6 h-6 mr-1 align-middle')}<span class="text-indigo-300">${esc(S.myTeam || 'Mi Equipo')}</span> <span class="text-xl mx-2">${sc.us} - ${sc.them}</span> <span class="text-rose-300">${esc(S.opp || 'Rival')}</span>${crestImg(crestOf('them', S), 'inline w-6 h-6 ml-1 align-middle')}</div>`
     + boxTable('us') + boxTable('them')
     + '<p class="text-[11px] text-slate-500">TC: tiros de campo · PPI: puntos de tiros de campo por intento · PÉR: pérdidas · PTS incluye los tiros libres de cada jugada.</p>';
 }
@@ -691,6 +693,38 @@ function toBlock(type, list, name, tcls, bcls) {
 }
 function renderTOStats() {
   $('to-stats').innerHTML = toBlock('TURNOVER', TURNOVERS, S.myTeam || 'Mi Equipo', 'text-indigo-300', 'bg-amber-500') + toBlock('RIVAL_TO', TURNOVERS_R, S.opp || 'Rival', 'text-rose-300', 'bg-rose-500');
+}
+
+// ---------- Escudos ----------
+const safeCrest = c => (typeof c === 'string' && /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(c)) ? c : '';
+const crestOf = (side, st) => { const t = teams.find(x => x.id === (side === 'us' ? st.myTeamId : st.oppTeamId)); return t ? safeCrest(t.crest) : ''; };
+const crestImg = (src, cls) => src ? `<img src="${src}" alt="" class="${cls} object-contain">` : '';
+function setCrest(tid, input) {
+  const f = input.files && input.files[0]; if (!f) return;
+  if (!f.type.startsWith('image/')) { alert('Elegí un archivo de imagen.'); input.value = ''; return; }
+  const rd = new FileReader();
+  rd.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const N = 160, c = document.createElement('canvas'); c.width = c.height = N;
+      const k = Math.min(N / img.width, N / img.height), w = img.width * k, h = img.height * k;
+      c.getContext('2d').drawImage(img, (N - w) / 2, (N - h) / 2, w, h);
+      const t = teams.find(x => x.id === tid); if (!t) return;
+      t.crest = c.toDataURL('image/png');
+      if (!saveTeams()) alert('No se pudo guardar el escudo (almacenamiento lleno).');
+      updateUI();
+    };
+    img.onerror = () => alert('No se pudo leer la imagen.');
+    img.src = rd.result;
+  };
+  rd.readAsDataURL(f); input.value = '';
+}
+function delCrest(tid) { const t = teams.find(x => x.id === tid); if (t) { delete t.crest; saveTeams(); updateUI(); } }
+function crestRow(t) {
+  const c = safeCrest(t.crest);
+  return `<div class="flex items-center gap-3 mb-3"><div class="w-16 h-16 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center overflow-hidden">${c ? `<img src="${c}" alt="Escudo" class="w-full h-full object-contain">` : '<i class="fa-solid fa-shield text-2xl text-slate-600"></i>'}</div>
+    <div class="flex flex-col gap-1.5"><button onclick="$('inp-crest').click()" class="bg-slate-700 hover:bg-slate-600 border border-slate-500 text-xs font-bold px-3 py-1.5 rounded-lg"><i class="fa-solid fa-image text-indigo-300"></i> ${c ? 'Cambiar escudo' : 'Subir escudo'}</button>${c ? `<button onclick="delCrest('${t.id}')" class="text-[11px] text-rose-300 hover:text-rose-200 text-left">Quitar escudo</button>` : ''}</div>
+    <input id="inp-crest" type="file" accept="image/*" class="hidden" onchange="setCrest('${t.id}', this)"></div>`;
 }
 
 // ---------- Equipos ----------
@@ -799,7 +833,7 @@ function teamDetail(t) {
   const sel = t.players.find(p => p.id === tv.player);
   const card = 'bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-xl';
   return `<div class="${card}">
-      <div class="flex gap-2 mb-3"><input value="${esc(t.name)}" onchange="renTeam('${t.id}',this.value)" class="flex-1 min-w-0 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm font-bold"><button onclick="delTeam('${t.id}')" class="bg-rose-900/50 hover:bg-rose-800 text-rose-200 text-xs px-3 rounded-lg border border-rose-700"><i class="fa-solid fa-trash"></i> Eliminar</button></div>
+      ${crestRow(t)}<div class="flex gap-2 mb-3"><input value="${esc(t.name)}" onchange="renTeam('${t.id}',this.value)" class="flex-1 min-w-0 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm font-bold"><button onclick="delTeam('${t.id}')" class="bg-rose-900/50 hover:bg-rose-800 text-rose-200 text-xs px-3 rounded-lg border border-rose-700"><i class="fa-solid fa-trash"></i> Eliminar</button></div>
       <p class="text-xs font-bold text-slate-300 mb-2">Jugadores (${t.players.length}/15)</p>
       <div class="space-y-2">${roster || '<p class="text-xs text-slate-500">Todavía no hay jugadores.</p>'}</div>
       ${t.players.length < 15 ? `<div class="flex gap-2 mt-2"><input id="inp-pnum" placeholder="#" class="w-14 ${inp} text-center"><input id="inp-pname" placeholder="Nombre del jugador" class="flex-1 min-w-0 ${inp}"><button onclick="addTP('${t.id}')" class="bg-indigo-600 hover:bg-indigo-500 text-xs font-bold px-3 rounded-lg">+ Agregar</button></div>` : ''}
@@ -824,7 +858,7 @@ function renderTeams() {
   $('tab-teams').innerHTML = `<div class="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-xl">
       <h3 class="text-sm font-bold mb-3"><i class="fa-solid fa-people-group text-indigo-400"></i> Equipos del torneo</h3>
       <div class="flex gap-2 mb-3"><input id="inp-newteam" placeholder="Nombre del equipo" class="flex-1 min-w-0 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm"><button onclick="newTeam()" class="bg-indigo-600 hover:bg-indigo-500 font-bold text-xs px-4 rounded-lg">Agregar</button></div>
-      <div class="flex flex-wrap gap-2">${teams.map(x => `<button onclick="selTeam('${x.id}')" class="px-3 py-2 rounded-lg border text-xs font-bold ${x.id === tv.team ? 'bg-indigo-600 border-indigo-300' : 'bg-slate-900 border-slate-600'}">${esc(x.name)} <span class="font-normal text-slate-300">(${x.players.length})</span></button>`).join('') || '<p class="text-xs text-slate-500">Todavía no cargaste equipos.</p>'}</div>
+      <div class="flex flex-wrap gap-2">${teams.map(x => `<button onclick="selTeam('${x.id}')" class="px-3 py-2 rounded-lg border text-xs font-bold ${x.id === tv.team ? 'bg-indigo-600 border-indigo-300' : 'bg-slate-900 border-slate-600'}">${crestImg(safeCrest(x.crest), 'inline w-5 h-5 mr-1 align-middle')}${esc(x.name)} <span class="font-normal text-slate-300">(${x.players.length})</span></button>`).join('') || '<p class="text-xs text-slate-500">Todavía no cargaste equipos.</p>'}</div>
     </div>` + (t ? teamDetail(t) : '');
 }
 
@@ -835,7 +869,7 @@ function renderGames() {
   $('inp-my').value = S.myTeam || ''; $('inp-opp').value = S.opp || ''; $('inp-date').value = S.date || today();
   $('games-list').innerHTML = games.length ? games.map(g => `
     <div class="bg-slate-900/70 border ${g.id === S.gameId ? 'border-indigo-500' : 'border-slate-700'} rounded-lg p-3 flex flex-wrap items-center justify-between gap-2">
-      <div><div class="font-bold text-sm">${esc(g.myTeam || 'Mi Equipo')} vs ${esc(g.opp || 'Rival')}${g.id === S.gameId ? ' <span class="text-[10px] text-indigo-300">(abierto)</span>' : ''}</div>
+      <div><div class="font-bold text-sm">${crestImg(crestOf('us', g), 'inline w-5 h-5 mr-1 align-middle')}${esc(g.myTeam || 'Mi Equipo')} vs ${crestImg(crestOf('them', g), 'inline w-5 h-5 mx-1 align-middle')}${esc(g.opp || 'Rival')}${g.id === S.gameId ? ' <span class="text-[10px] text-indigo-300">(abierto)</span>' : ''}</div>
       <div class="text-[11px] text-slate-400">${esc(g.date)} · ${g.events.length} eventos</div></div>
       <div class="text-xl font-extrabold">${g.us} - ${g.them}</div>
       <div class="flex gap-1 text-[11px]">
@@ -850,6 +884,8 @@ function updateUI(light) {
   const sc = scores(S);
   $('score-us').innerText = sc.us; $('score-them').innerText = sc.them;
   $('rival-label').innerText = S.opp || 'Rival'; $('my-label').innerText = S.myTeam || 'Mi Equipo';
+  const setCrestEl = (id, src) => { const el = $(id); if (src) { el.src = src; el.classList.remove('hidden'); } else el.classList.add('hidden'); };
+  setCrestEl('my-crest', crestOf('us', S)); setCrestEl('rival-crest', crestOf('them', S));
   if (light) return;
   renderQuarterBtns();
   ['us', 'them'].forEach(t => {
@@ -1073,6 +1109,7 @@ async function exportPDF(st, period) {
   doc.setFontSize(15); doc.setTextColor(30, 41, 59); doc.text('CourtStats PRO · ' + r.kind, M, 14);
   doc.setFontSize(9); doc.setTextColor(100); doc.text(r.sub, M, 19);
   doc.setFontSize(17); doc.setTextColor(0); doc.text(`${r.my}  ${r.us} - ${r.them}  ${r.opp}`, W / 2, 30, { align: 'center' });
+  [[crestOf('us', st), M], [crestOf('them', st), W - M - 14]].forEach(([src, x]) => { if (src) { try { doc.addImage(src, 'PNG', x, 21, 14, 14); } catch (e) { /* sin escudo */ } } });
   let y = 37;
   doc.setFontSize(10.5); doc.setTextColor(30, 41, 59); doc.text('Lectura rápida', M, y); y += 5;
   doc.setFontSize(8.5); doc.setTextColor(40);
@@ -1103,7 +1140,7 @@ async function exportPDF(st, period) {
 
 // ---------- Versión, migraciones y respaldo ----------
 // Al publicar una mejora: subir APP_VERSION aquí y VERSION en sw.js.
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.6.0';
 // SCHEMA: versión del formato de los datos guardados. Si un cambio futuro altera ese formato,
 // se sube SCHEMA y se agrega en MIGRATIONS[n] una función que convierte los datos viejos.
 const SCHEMA = 1, LS_SCHEMA = 'courtstats_schema', LS_BACKUP = 'courtstats_lastbackup';
@@ -1130,7 +1167,7 @@ function mergeBackup(d) {
   if ((d.schema || 1) > SCHEMA) throw new Error('El respaldo es de una versión más nueva de la app. Actualizá la app y probá de nuevo.');
   const m = migrate({ S: freshState(), games: d.games, teams: d.teams }, d.schema || 1);
   let ng = 0, nt = 0;
-  m.teams.forEach(t => { if (!teams.some(x => x.id === t.id)) { teams.push(t); nt++; } });
+  m.teams.forEach(t => { const x = teams.find(y => y.id === t.id); if (!x) { teams.push(t); nt++; } else if (!x.crest && t.crest) x.crest = t.crest; });
   m.games.forEach(g => { if (!games.some(x => x.id === g.id)) { games.push(g); ng++; } });
   games.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
   saveTeams(); lsSet(LS_GAMES, games);
