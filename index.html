@@ -194,6 +194,7 @@
         <input id="inp-my" oninput="S.myTeam=this.value;updateUI(true)" placeholder="Mi equipo" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">
         <input id="inp-opp" oninput="S.opp=this.value;updateUI(true)" placeholder="Nombre del rival" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">
         <input id="inp-date" type="date" oninput="S.date=this.value" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">
+        <input id="inp-comp" oninput="S.comp=this.value" placeholder="Competición y fase (ej.: Liga · 4tos de final)" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm sm:col-span-3">
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
         <label class="text-[11px] text-slate-400">Mi equipo (de Equipos)<select id="sel-my" onchange="applyTeam('us', this.value)" class="w-full mt-1 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200"></select></label>
@@ -341,7 +342,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return 
 const defaultPlayers = () => Array.from({ length: 12 }, (_, i) => ({ id: i + 1, number: String(i + 4), name: `Jugador ${i + 4}` }));
 const defaultRPlayers = () => Array.from({ length: 12 }, (_, i) => ({ id: i + 1, number: String(i + 4), name: `Rival ${i + 4}` }));
 const tn = (e, st) => e.team === 'Mi Equipo' ? (st.myTeam || 'Mi Equipo') : (st.opp || 'Rival');
-const freshState = (players) => { const pl = players || defaultPlayers(); return { quarter: 'Q1', players: pl, onCourt: pl.slice(0, 5).map(p => p.id), selected: null, rivalPhase: 'Early Set', myTeam: '', rPlayers: defaultRPlayers(), rOnCourt: [1, 2, 3, 4, 5], rSelected: null, myTeamId: null, oppTeamId: null, ftPhase: '', events: [], gameId: null, opp: '', date: today() }; };
+const freshState = (players) => { const pl = players || defaultPlayers(); return { quarter: 'Q1', players: pl, onCourt: pl.slice(0, 5).map(p => p.id), selected: null, rivalPhase: 'Early Set', myTeam: '', rPlayers: defaultRPlayers(), rOnCourt: [1, 2, 3, 4, 5], rSelected: null, myTeamId: null, oppTeamId: null, ftPhase: '', comp: '', events: [], gameId: null, opp: '', date: today() }; };
 
 let S = Object.assign(freshState(), lsGet(LS_CUR, {}));
 let games = lsGet(LS_GAMES, []);
@@ -806,7 +807,7 @@ function playerDetail(t, p, evs) {
   const chip = (v, l) => `<button onclick="setTVPhase('${v}')" class="px-2 py-1 rounded border text-[11px] ${tv.phase === v ? 'bg-indigo-600 border-indigo-300' : 'bg-slate-900 border-slate-600 text-slate-300'}">${l}</button>`;
   const th = 'p-2 text-right';
   return `<div class="bg-slate-800 rounded-xl border border-indigo-500/60 p-4 shadow-xl">
-    <h3 class="text-sm font-bold mb-3"><span class="text-indigo-300">#${esc(p.number)}</span> ${esc(p.name)} <span class="text-slate-400 font-normal text-xs">· ${esc(t.name)}</span></h3>
+    <div class="flex justify-between items-start gap-2 mb-3"><h3 class="text-sm font-bold"><span class="text-indigo-300">#${esc(p.number)}</span> ${esc(p.name)} <span class="text-slate-400 font-normal text-xs">· ${esc(t.name)}</span></h3><button onclick="exportPlayersPDF('${t.id}','${p.id}')" class="shrink-0 bg-rose-600 hover:bg-rose-500 font-bold text-[11px] px-3 py-1.5 rounded-lg"><i class="fa-solid fa-file-pdf"></i> PDF</button></div>
     <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center mb-4">
       ${[['PTS', a.pts], ['TC', `${a.fgm}/${a.fga}`], ['PPI', ppiF(a.fgp, a.fga)], ['eFG%', efgF(a)], ['TL', `${a.ftm}/${a.fta}`], ['PÉR', a.to]].map(([l, v]) => `<div class="bg-slate-900/70 rounded p-2"><div class="text-[10px] text-slate-400">${l}</div><div class="font-extrabold text-sm">${v}</div></div>`).join('')}
     </div>
@@ -843,6 +844,7 @@ function teamDetail(t) {
       <div class="overflow-x-auto"><table class="w-full text-xs text-slate-300"><thead class="bg-slate-900/80 text-slate-400 uppercase font-semibold"><tr><th class="p-2 text-left">Jugador</th><th class="p-2 text-right">PJ</th><th class="p-2 text-right">PTS</th><th class="p-2 text-right">TC</th><th class="p-2 text-right">2P</th><th class="p-2 text-right">3P</th><th class="p-2 text-right">TL</th><th class="p-2 text-right">PPI</th><th class="p-2 text-right">eFG%</th><th class="p-2 text-right">PÉR</th></tr></thead>
       <tbody class="divide-y divide-slate-700">${sRows || '<tr><td colspan="10" class="p-4 text-center text-slate-500">Sin jugadores.</td></tr>'}</tbody>
       <tfoot><tr class="bg-slate-900/80 font-bold border-t-2 border-slate-600"><td class="p-2">TOTAL</td><td class="${td}">-</td><td class="${td}">${tot.pts}</td><td class="${td}">${tot.fgm}/${tot.fga}</td><td class="${td}">${tot.m2}/${tot.a2}</td><td class="${td}">${tot.m3}/${tot.a3}</td><td class="${td}">${tot.ftm}/${tot.fta}</td><td class="${td}">${ppiF(tot.fgp, tot.fga)}</td><td class="${td}">${efgF(tot)}</td><td class="${td}">${tot.to}</td></tr></tfoot></table></div>
+      <button onclick="exportPlayersPDF('${t.id}')" class="mt-3 bg-rose-600 hover:bg-rose-500 font-bold text-xs px-4 py-2 rounded-lg"><i class="fa-solid fa-file-pdf"></i> PDF de jugadores del equipo</button>
       <p class="text-[11px] text-slate-500 mt-2">Tocá un jugador para ver su detalle y su mapa de tiro. Solo cuentan los partidos jugados con el equipo vinculado desde Partidos.</p>
     </div>
     <div class="${card}"><h3 class="text-sm font-bold mb-3"><i class="fa-solid fa-bolt text-amber-400"></i> Puntos por momento de la ofensiva <span class="text-slate-400 font-normal text-xs">· puntos (aciertos/intentos)</span></h3>
@@ -866,7 +868,7 @@ function renderGames() {
   renderBackupInfo();
   const so = sel => '<option value="">— Sin vincular —</option>' + teams.map(t => `<option value="${t.id}" ${t.id === sel ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
   $('sel-my').innerHTML = so(S.myTeamId); $('sel-opp').innerHTML = so(S.oppTeamId);
-  $('inp-my').value = S.myTeam || ''; $('inp-opp').value = S.opp || ''; $('inp-date').value = S.date || today();
+  $('inp-my').value = S.myTeam || ''; $('inp-opp').value = S.opp || ''; $('inp-date').value = S.date || today(); $('inp-comp').value = S.comp || '';
   $('games-list').innerHTML = games.length ? games.map(g => `
     <div class="bg-slate-900/70 border ${g.id === S.gameId ? 'border-indigo-500' : 'border-slate-700'} rounded-lg p-3 flex flex-wrap items-center justify-between gap-2">
       <div><div class="font-bold text-sm">${crestImg(crestOf('us', g), 'inline w-5 h-5 mr-1 align-middle')}${esc(g.myTeam || 'Mi Equipo')} vs ${crestImg(crestOf('them', g), 'inline w-5 h-5 mx-1 align-middle')}${esc(g.opp || 'Rival')}${g.id === S.gameId ? ' <span class="text-[10px] text-indigo-300">(abierto)</span>' : ''}</div>
@@ -922,12 +924,12 @@ function saveGame() {
 function openGame(id) {
   const g = games.find(x => x.id === id); if (!g) return;
   if (!confirm('Se abrirá este partido y reemplazará el actual (guardalo antes si no lo hiciste). ¿Continuar?')) return;
-  S = Object.assign(freshState(), JSON.parse(JSON.stringify({ quarter: 'Q1', players: g.players, onCourt: g.onCourt || [1, 2, 3, 4, 5], myTeam: g.myTeam || "", myTeamId: g.myTeamId || null, oppTeamId: g.oppTeamId || null, rPlayers: g.rPlayers || defaultRPlayers(), rOnCourt: g.rOnCourt || [1, 2, 3, 4, 5], events: g.events, gameId: g.id, opp: g.opp, date: g.date })));
+  S = Object.assign(freshState(), JSON.parse(JSON.stringify({ quarter: 'Q1', players: g.players, onCourt: g.onCourt || [1, 2, 3, 4, 5], myTeam: g.myTeam || "", comp: g.comp || "", myTeamId: g.myTeamId || null, oppTeamId: g.oppTeamId || null, rPlayers: g.rPlayers || defaultRPlayers(), rOnCourt: g.rOnCourt || [1, 2, 3, 4, 5], events: g.events, gameId: g.id, opp: g.opp, date: g.date })));
   updateUI(); switchTab('court');
 }
 function newGame() {
   if (!confirm('¿Empezar un partido nuevo? Se conservará la plantilla. Guardá el actual antes si lo necesitás.')) return;
-  const keep = { myTeam: S.myTeam, myTeamId: S.myTeamId }; S = Object.assign(freshState(S.players), keep); updateUI();
+  const keep = { myTeam: S.myTeam, myTeamId: S.myTeamId, comp: S.comp }; S = Object.assign(freshState(S.players), keep); updateUI();
 }
 function deleteGame(id) {
   if (!confirm('¿Eliminar este partido guardado?')) return;
@@ -1053,6 +1055,39 @@ function buildReport(st, period) {
   ins.push(`Triples: ${my} ${AU.m3}/${AU.a3} (${pc(AU.m3, AU.a3)}) · ${opp} ${AR.m3}/${AR.a3} (${pc(AR.m3, AR.a3)})`, `Tiros libres: ${my} ${AU.ftm}/${AU.fta} · ${opp} ${AR.ftm}/${AR.fta}`);
   const top = (c, list) => { const m = Math.max(...c); return m ? ' (más frecuente: ' + list[c.indexOf(m)] + ')' : ''; };
   ins.push(`Pérdidas: ${my} ${AU.to}${top(cu, TURNOVERS)} · ${opp} ${AR.to}${top(cr, TURNOVERS_R)}`);
+  const zs = { us: zoneStats(ev.filter(e => e.type === 'SHOT' && e.x !== undefined)), them: zoneStats(ev.filter(e => e.type === 'RIVAL_FG' && e.x !== undefined)) };
+  const bestZone = z => ZONES.map(([k, l]) => ({ l, ...z[k] })).filter(d => d.a >= 3).sort((x, y) => y.pts / y.a - x.pts / x.a)[0];
+  [[my, zs.us], [opp, zs.them]].forEach(([n, z]) => { const b = bestZone(z); if (b) ins.push(`Zona más efectiva de ${n}: ${b.l} (${b.m}/${b.a}, ${f1(b.pts / b.a)} PPI)`); });
+  const efgN = a => a.fga ? (a.fgm + 0.5 * a.m3) / a.fga * 100 : 0, rt = (m, a) => a ? m / a * 100 : 0, pU = paint('SHOT'), pR = paint('RIVAL_FG'), pcS = n => String(Math.round(n * 10) / 10).replace('.', ',') + '%';
+  const cmp = [
+    ['efg', 'eFG%', efgN(AU), efgN(AR), pcS, false, 2, AU.fga && AR.fga], ['ppi', 'PPI (tiros de campo)', AU.fga ? AU.fgp / AU.fga : 0, AR.fga ? AR.fgp / AR.fga : 0, f1, false, 0.05, AU.fga && AR.fga],
+    ['3p', 'Triples (%)', rt(AU.m3, AU.a3), rt(AR.m3, AR.a3), pcS, false, 3, AU.a3 && AR.a3], ['ft', 'Tiros libres (%)', rt(AU.ftm, AU.fta), rt(AR.ftm, AR.fta), pcS, false, 3, AU.fta && AR.fta],
+    ['to', 'Pérdidas', AU.to, AR.to, String, true, 1, AU.to + AR.to], ['paint', 'Puntos en la pintura', pU, pR, String, false, 2, pU + pR], ['ftp', 'Puntos de tiros libres', AU.ftm, AR.ftm, String, false, 2, AU.fta + AR.fta],
+    ['fg', 'Tiros de campo (%)', rt(AU.fgm, AU.fga), rt(AR.fgm, AR.fga), pcS, false, 3, AU.fga && AR.fga]
+  ].map(([k, l, u, v, fmt, low, tol, ok]) => ({ k, l, u, v, fu: fmt(u), fv: fmt(v), low, verdict: !ok ? 'none' : Math.abs(u - v) <= tol ? 'even' : ((u - v) * (low ? -1 : 1) > 0 ? 'good' : 'bad') }));
+  const C = k => cmp.find(x => x.k === k), topSit = (c, list) => { const m = Math.max(...c); return m ? list[c.indexOf(m)] : null; }, tU = topSit(cu, TURNOVERS), tRv = topSit(cr, TURNOVERS_R);
+  const mk = (c, bad, good) => c && c.verdict === 'bad' ? { ...bad, tone: 'bad' } : c && c.verdict === 'good' ? { ...good, tone: 'good' } : null;
+  const vs = c => `${c.fu} contra ${c.fv} del rival`;
+  const hi = dif.length ? dif.reduce((a, b) => b.d > a.d ? b : a) : null, lo = dif.length ? dif.reduce((a, b) => b.d < a.d ? b : a) : null;
+  const keys = [];
+  [mk(C('efg'), { t: 'Mejorar la selección de tiro', d: `eFG%: ${vs(C('efg'))}.`, a: 'Buscar más tiros cerca del aro y triples abiertos; evitar dobles largos.' }, { t: 'Ventaja en la efectividad de tiro', d: `eFG%: ${vs(C('efg'))}.`, a: 'Sostener el tipo de tiros que se están tomando.' }),
+    mk(C('to'), { t: 'Cuidar el balón', d: `${AU.to} pérdidas contra ${AR.to} del rival${tU ? '; la más frecuente: ' + tU : ''}.`, a: 'Trabajar esa situación en los entrenamientos.' }, { t: 'Buen cuidado del balón', d: `${AU.to} pérdidas contra ${AR.to} del rival.`, a: 'Mantener la circulación y las decisiones.' }),
+    mk(C('ft'), { t: 'Convertir los libres', d: `Tiros libres: ${vs(C('ft'))}.`, a: 'Trabajar la línea o elegir quién tira en los finales.' }, { t: 'Solidez en la línea de libres', d: `Tiros libres: ${vs(C('ft'))}.`, a: 'Seguir generando faltas.' }),
+    SR[0] ? { t: `Controlar a #${SR[0].p.number} ${SR[0].p.name}`, d: `${SR[0].a.pts} pts, TC ${SR[0].a.fgm}/${SR[0].a.fga}, eFG% ${efgF(SR[0].a)}.`, a: 'Defensa prioritaria y ayudas preparadas de su lado.', tone: 'warn' } : null,
+    mk(C('paint'), { t: 'Perdimos la pintura', d: `Puntos en la pintura: ${vs(C('paint'))}.`, a: 'Atacar el aro con más decisión y cerrar el acceso rival.' }, { t: 'Dominio de la pintura', d: `Puntos en la pintura: ${vs(C('paint'))}.`, a: 'Seguir atacando el aro.' }),
+    lo && lo.d < 0 ? { t: `El rival nos supera en ${lo.ph}`, d: `${sgn(-lo.d)} PPI a favor del rival en ese momento.`, a: 'Preparar cómo defender ese tipo de ataque.', tone: 'bad' } : hi && hi.d > 0 ? { t: `Ventaja propia en ${hi.ph}`, d: `${sgn(hi.d)} PPI sobre el rival en ese momento.`, a: 'Buscar generar más jugadas de ese tipo.', tone: 'good' } : null,
+    mk(C('3p'), { t: 'Efectividad en los triples', d: `Triples: ${vs(C('3p'))}.`, a: 'Revisar quién y desde dónde se tira.' }, { t: 'Buen aprovechamiento de triples', d: `Triples: ${vs(C('3p'))}.`, a: 'Mantener la circulación para tirar abiertos.' })
+  ].forEach(k => { if (k && keys.length < 4) keys.push(k); });
+  const foda = { F: [], D: [], O: [], A: [] };
+  cmp.forEach(c => { if (c.verdict === 'good') foda.F.push(`${c.l}: ${c.fu} contra ${c.fv}`); else if (c.verdict === 'bad') foda.D.push(`${c.l}: ${c.fu} contra ${c.fv}`); });
+  const bU = PU.filter(d => d.a >= 2).sort((x, y) => y.ppi - x.ppi)[0], bR = PR.filter(d => d.a >= 2).sort((x, y) => y.ppi - x.ppi)[0], wR = PR.filter(d => d.a >= 2).sort((x, y) => x.ppi - y.ppi)[0], zR = bestZone(zs.them);
+  if (bU) foda.O.push(`Insistir en ${bU.ph}: ${f1(bU.ppi)} PPI en ${bU.a} tiros`);
+  if (wR && (!bR || wR.ph !== bR.ph)) foda.O.push(`El ataque rival rinde menos en ${wR.ph} (${f1(wR.ppi)} PPI)`);
+  if (tRv) foda.O.push(`El rival pierde más por: ${tRv}`);
+  if (SR[0]) foda.A.push(`${SR[0].p.name}: ${SR[0].a.pts} pts (TC ${SR[0].a.fgm}/${SR[0].a.fga})`);
+  if (bR) foda.A.push(`Ataque rival más efectivo: ${bR.ph} (${f1(bR.ppi)} PPI)`);
+  if (zR) foda.A.push(`Zona más efectiva del rival: ${zR.l} (${zR.m}/${zR.a})`);
+  const D = { ev, qs, qsc, AU, AR, PU, PR, SU, SR, cmp, keys, foda, zs, sc, pU, pR, TA, TB };
   const sections = [
     { title: 'Resumen rápido', head: ['', my, opp], body: summary },
     { title: 'Marcador por cuarto', head: ['Equipo', ...qs, 'Total'], body: [[my, ...qsc.map(x => x.us), sc.us], [opp, ...qsc.map(x => x.them), sc.them]] },
@@ -1068,7 +1103,7 @@ function buildReport(st, period) {
   ];
   const history = ev.map(e => [e.quarter, tn(e, st), e.playerName ? `#${e.playerNumber} ${e.playerName}` : '-', evDetail(e), e.phase || '-', e.isMade === undefined ? '-' : e.isMade ? 'Acierto' : 'Fallo']);
   const shots = ev.filter(e => (e.type === 'SHOT' || e.type === 'RIVAL_FG') && e.x !== undefined);
-  return { my, opp, us: sc.us, them: sc.them, kind: H1 ? 'Informe de entretiempo' : 'Informe del partido', sub: `Fecha: ${st.date || ''}${H1 ? ' · Primer tiempo (Q1 y Q2)' : ''}`, insights: ins, sections, history, histHead: ['Cuarto', 'Equipo', 'Jugador', 'Detalle', 'Fase', 'Resultado'], shots };
+  return { D, my, opp, us: sc.us, them: sc.them, kind: H1 ? 'Informe de entretiempo' : 'Informe del partido', sub: `Fecha: ${st.date || ''}${st.comp ? ' · ' + st.comp : ''}${H1 ? ' · Primer tiempo (Q1 y Q2)' : ''}`, insights: ins, sections, history, histHead: ['Cuarto', 'Equipo', 'Jugador', 'Detalle', 'Fase', 'Resultado'], shots };
 }
 async function exportXLSX(st) {
   if (!st) return;
@@ -1085,8 +1120,38 @@ async function exportXLSX(st) {
   const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   await deliverFile(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), exportName(st, 'xlsx'), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 }
-function drawCourt(doc, x0, y0, w, shots, square) {
+// ---------- Zonas de tiro ----------
+const ZONES = [['rim', 'Aro', 250, 78], ['paint', 'Pintura', 250, 150], ['midL', 'Media izq.', 95, 150], ['midR', 'Media der.', 405, 150], ['midC', 'Media centro', 250, 258], ['w3L', 'Triple izq.', 70, 390], ['top3', 'Triple frente', 250, 372], ['w3R', 'Triple der.', 430, 390]];
+function zoneOf(e) {
+  const sx = +e.x * 5, sy = +e.y * 4.7;
+  if (e.points === 3) return sx < 190 ? 'w3L' : sx > 310 ? 'w3R' : 'top3';
+  if (Math.hypot(sx - 250, sy - 32) <= 60) return 'rim';
+  if (sx >= 170 && sx <= 330 && sy <= 195) return 'paint';
+  return sx < 170 ? 'midL' : sx > 330 ? 'midR' : 'midC';
+}
+function zoneStats(shots) {
+  const z = {}; ZONES.forEach(([k]) => z[k] = { m: 0, a: 0, pts: 0 });
+  shots.forEach(e => { const q = z[zoneOf(e)]; q.a++; if (e.isMade) { q.m++; q.pts += e.points; } });
+  return z;
+}
+const fmtDate = d => { try { return new Date((d || today()) + 'T12:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) { return d || ''; } };
+function profileOf(evs) {
+  const a = aggOf(evs), sh = evs.filter(e => e.type === 'SHOT' || e.type === 'RIVAL_FG'), loc = sh.filter(e => e.x !== undefined), z = zoneStats(loc), out = [];
+  if (a.fga >= 3) {
+    const near = loc.length ? (z.rim.a + z.paint.a) / loc.length : 0;
+    out.push(near >= 0.5 ? 'ataca el aro' : a.a3 / a.fga >= 0.5 ? 'tirador de perímetro' : 'juego mixto');
+    if (a.fta / a.fga >= 0.4) out.push('va a la línea');
+  }
+  const pf = phaseOf(evs).map((d, i) => ({ i, t: d.pts + d.fm })).filter(d => d.t > 0).sort((x, y) => y.t - x.t)[0];
+  if (pf) out.push(`anota más en ${PHASES[pf.i]} (${pf.t} pts)`);
+  const bz = ZONES.map(([k, l]) => ({ l, ...z[k] })).filter(d => d.a >= 2).sort((x, y) => y.pts / y.a - x.pts / x.a)[0];
+  if (bz) out.push(`zona más efectiva: ${bz.l} (${bz.m}/${bz.a})`);
+  return out;
+}
+const tipFor = pr => pr.includes('va a la línea') ? 'Defenderlo sin faltas.' : pr.includes('ataca el aro') ? 'Cerrarle el aro y ceder el perímetro.' : pr.includes('tirador de perímetro') ? 'Salirle al tiro.' : '';
+function drawCourt(doc, x0, y0, w, shots, square, rad) {
   const k = w / 500, h = 470 * k, P = (cx, cy) => [x0 + cx * k, y0 + cy * k];
+  doc.setFillColor(250, 250, 247); doc.rect(x0, y0, w, h, 'F');
   doc.setDrawColor(100, 116, 139); doc.setLineWidth(0.3);
   doc.rect(x0 + 5 * k, y0 + 5 * k, 490 * k, 460 * k); doc.rect(x0 + 170 * k, y0 + 5 * k, 160 * k, 190 * k);
   doc.circle(...P(250, 190), 60 * k); doc.line(...P(220, 20), ...P(280, 20));
@@ -1094,53 +1159,239 @@ function drawCourt(doc, x0, y0, w, shots, square) {
   doc.setDrawColor(99, 102, 241); doc.setLineWidth(0.5);
   const pts = []; for (let i = 0; i <= 40; i++) { const a = Math.PI - Math.PI * i / 40; pts.push(P(250 + 220 * Math.cos(a), 90 + 220 * Math.sin(a))); }
   doc.line(...P(30, 5), ...P(30, 90)); for (let i = 0; i < pts.length - 1; i++) doc.line(...pts[i], ...pts[i + 1]); doc.line(...P(470, 90), ...P(470, 5));
+  const r = rad || 1.7;
   shots.forEach(s => {
     const px = x0 + (+s.x) / 100 * w, py = y0 + (+s.y) / 100 * h;
     doc.setFillColor(...(s.isMade ? [16, 185, 129] : [244, 63, 94]));
-    if (square) doc.rect(px - 1.6, py - 1.6, 3.2, 3.2, 'F'); else doc.circle(px, py, 1.7, 'F');
+    if (square) doc.rect(px - r, py - r, 2 * r, 2 * r, 'F'); else doc.circle(px, py, r, 'F');
   });
   return h;
 }
+function drawChips(doc, x0, y0, w, z) {
+  const k = w / 500;
+  ZONES.forEach(([key, , ax, ay]) => {
+    const d = z[key]; if (!d.a) return;
+    const col = d.pts / d.a >= 1.1 ? [134, 214, 160] : d.pts / d.a >= 0.8 ? [247, 226, 140] : [236, 150, 146], cx = x0 + ax * k, cy = y0 + ay * k;
+    doc.setFillColor(...col); doc.roundedRect(cx - 7, cy - 4, 14, 8, 1.2, 1.2, 'F');
+    doc.setTextColor(30, 41, 59); doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.text(Math.round(d.m / d.a * 100) + '%', cx, cy - 0.3, { align: 'center' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(5.5); doc.text(`${d.m}/${d.a}`, cx, cy + 2.7, { align: 'center' });
+  });
+}
+// ---------- utilidades comunes de PDF ----------
+function pdfKit(doc) {
+  const W = 210, H = 297, M = 12, CW = W - 2 * M, NAVY = [30, 41, 59], CU = [79, 70, 229], CR = [225, 29, 72], GREY = [100, 116, 139];
+  const k = { W, H, M, CW, NAVY, CU, CR, GREY, y: 22 };
+  k.font = (s, b, col) => { doc.setFont('helvetica', b ? 'bold' : 'normal'); doc.setFontSize(s); doc.setTextColor(...(col || NAVY)); };
+  k.crest = (src, name, x, y, s, col) => {
+    if (src) { try { doc.addImage(src, 'PNG', x, y, s, s); return; } catch (e) { /* sin imagen */ } }
+    doc.setFillColor(...col); doc.circle(x + s / 2, y + s / 2, s / 2, 'F');
+    k.font(s * 1.05, 1, [255, 255, 255]); doc.text((name || '?').trim().slice(0, 2).toUpperCase(), x + s / 2, y + s / 2 + s * 0.14, { align: 'center' });
+  };
+  k.newPage = () => { doc.addPage(); k.y = 22; };
+  k.ensure = h => { if (k.y + h > H - 16) k.newPage(); };
+  k.sec = (title, col) => { k.ensure(20); doc.setFillColor(...(col || NAVY)); doc.rect(M, k.y, CW, 7, 'F'); k.font(9.5, 1, [255, 255, 255]); doc.text(title.toUpperCase(), M + 3, k.y + 4.8); k.y += 10; };
+  k.sub = (t, col) => { k.ensure(12); k.font(9.5, 1, col); doc.text(t, M, k.y + 3); k.y += 6; };
+  k.para = (txt, x, y, w, size, col, bold) => { k.font(size, bold, col); const ln = doc.splitTextToSize(String(txt), w); doc.text(ln, x, y); return y + ln.length * size * 0.42; };
+  k.tbl = (head, body, foot, col, opt) => {
+    k.ensure(26);
+    doc.autoTable({ startY: k.y, head: [head], body, foot: foot ? [foot] : undefined, theme: 'grid', styles: { fontSize: 8, cellPadding: 1.4, lineColor: [226, 232, 240], textColor: NAVY },
+      headStyles: { fillColor: col || NAVY, textColor: 255 }, footStyles: { fillColor: [226, 232, 240], textColor: NAVY, fontStyle: 'bold' }, alternateRowStyles: { fillColor: [248, 250, 252] }, margin: { top: 22, left: M, right: M }, ...(opt || {}) });
+    k.y = doc.lastAutoTable.finalY + 6;
+  };
+  k.cover = (title, subtitle, src, name, col) => {
+    doc.setFillColor(...NAVY); doc.rect(0, 0, W, 62, 'F');
+    k.font(10, 0, [148, 163, 184]); doc.text('C O U R T S T A T S   P R O', W / 2, 18, { align: 'center' });
+    k.font(24, 1, [255, 255, 255]); doc.text(title, W / 2, 36, { align: 'center' });
+    if (subtitle) { k.font(10, 0, [203, 213, 225]); doc.text(subtitle, W / 2, 48, { align: 'center' }); }
+  };
+  k.frame = (leftName, leftSrc, leftCol, rightName, rightSrc, rightCol, mid, footer, from) => {
+    const n = doc.getNumberOfPages();
+    for (let i = from; i <= n; i++) {
+      doc.setPage(i); doc.setFillColor(...NAVY); doc.rect(0, 0, W, 15, 'F');
+      k.crest(leftSrc, leftName, M, 3.5, 8, leftCol); k.font(9, 1, [255, 255, 255]); doc.text(leftName, M + 10, 9);
+      if (rightName) { k.crest(rightSrc, rightName, W - M - 8, 3.5, 8, rightCol); k.font(9, 1, [255, 255, 255]); doc.text(rightName, W - M - 10, 9, { align: 'right' }); }
+      k.font(8, 0, [148, 163, 184]); doc.text(mid, W / 2, 9, { align: 'center' });
+      doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.2); doc.line(M, H - 12, W - M, H - 12);
+      k.font(7.5, 0, GREY); doc.text(footer, M, H - 7.5); doc.text(`Página ${i} de ${n}`, W - M, H - 7.5, { align: 'right' });
+    }
+  };
+  return k;
+}
+// ---------- PDF del partido ----------
 async function exportPDF(st, period) {
   if (!st) return;
   const J = window.jspdf;
   if (!J || !J.jsPDF) { alert('No se pudo cargar la librería de PDF. Abrí la app con internet una vez y probá de nuevo.'); return; }
-  const r = buildReport(st, period), doc = new J.jsPDF({ unit: 'mm', format: 'a4' }), W = 210, M = 12;
-  doc.setFontSize(15); doc.setTextColor(30, 41, 59); doc.text('CourtStats PRO · ' + r.kind, M, 14);
-  doc.setFontSize(9); doc.setTextColor(100); doc.text(r.sub, M, 19);
-  doc.setFontSize(17); doc.setTextColor(0); doc.text(`${r.my}  ${r.us} - ${r.them}  ${r.opp}`, W / 2, 30, { align: 'center' });
-  [[crestOf('us', st), M], [crestOf('them', st), W - M - 14]].forEach(([src, x]) => { if (src) { try { doc.addImage(src, 'PNG', x, 21, 14, 14); } catch (e) { /* sin escudo */ } } });
-  let y = 37;
-  doc.setFontSize(10.5); doc.setTextColor(30, 41, 59); doc.text('Lectura rápida', M, y); y += 5;
-  doc.setFontSize(8.5); doc.setTextColor(40);
-  r.insights.forEach(t => { const ln = doc.splitTextToSize('• ' + t, W - 2 * M); if (y + ln.length * 4 > 280) { doc.addPage(); y = 14; } doc.text(ln, M, y); y += ln.length * 4 + 0.8; });
-  y += 4;
-  const table = (title, head, body, foot, color, note) => {
-    if (y > 245) { doc.addPage(); y = 14; }
-    doc.setFontSize(10.5); doc.setTextColor(30, 41, 59); doc.text(title, M, y);
-    doc.autoTable({ startY: y + 2, head: [head], body, foot: foot ? [foot] : undefined, theme: 'grid', styles: { fontSize: 8, cellPadding: 1.4 },
-      headStyles: { fillColor: color || [30, 41, 59] }, footStyles: { fillColor: [226, 232, 240], textColor: 0, fontStyle: 'bold' }, margin: { left: M, right: M } });
-    y = doc.lastAutoTable.finalY + 6;
-    if (note) { const nl = doc.splitTextToSize(note, W - 2 * M); doc.setFontSize(7.5); doc.setTextColor(110); doc.text(nl, M, y - 1); y += nl.length * 3 + 2; }
-    y += 3;
-  };
-  r.sections.forEach(s2 => table(s2.title, s2.head, s2.body, s2.foot, s2.color, s2.note));
-  doc.addPage(); doc.setFontSize(12); doc.setTextColor(30, 41, 59); doc.text('Mapa de tiro', M, 14);
-  const w = (W - 2 * M - 6) / 2, mine = r.shots.filter(e => e.type === 'SHOT'), theirs = r.shots.filter(e => e.type === 'RIVAL_FG');
-  doc.setFontSize(9);
-  doc.text(`${r.my}: ${mine.filter(e => e.isMade).length}/${mine.length} anotados (círculos)`, M, 22);
-  doc.text(`${r.opp}: ${theirs.filter(e => e.isMade).length}/${theirs.length} anotados (cuadrados)`, M + w + 6, 22);
-  drawCourt(doc, M, 25, w, mine, false); drawCourt(doc, M + w + 6, 25, w, theirs, true);
-  doc.setTextColor(100); doc.text('Verde: anotado · Rojo: fallado', M, 25 + w * 0.94 + 6);
-  doc.addPage(); y = 14; table('Historial del partido', r.histHead, r.history.length ? r.history : [['-', '-', '-', 'Sin eventos', '-', '-']]);
-  const n = doc.getNumberOfPages();
-  for (let i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120); doc.text(`CourtStats PRO · ${i}/${n}`, W / 2, 291, { align: 'center' }); }
-  await deliverFile(doc.output('blob'), exportName(st, 'pdf', period === 'H1' ? '_1T' : ''), 'application/pdf');
+  const r = buildReport(st, period), D = r.D, doc = new J.jsPDF({ unit: 'mm', format: 'a4' }), H1 = period === 'H1', k = pdfKit(doc);
+  const { W, M, CW, NAVY, CU, CR, GREY, font, crest, sec, sub, para, tbl, ensure } = k;
+  const cuS = crestOf('us', st), crS = crestOf('them', st), GOOD = [16, 185, 129], BAD = [225, 29, 72];
+  // portada
+  k.cover(H1 ? 'INFORME DE ENTRETIEMPO' : 'INFORME DE PARTIDO', [st.comp, H1 ? 'Primer tiempo (Q1 y Q2)' : ''].filter(Boolean).join(' · '));
+  crest(cuS, r.my, W / 2 - 62, 80, 34, CU); crest(crS, r.opp, W / 2 + 28, 80, 34, CR);
+  font(14, 0, [148, 163, 184]); doc.text('VS', W / 2, 100, { align: 'center' });
+  font(18, 1, CU); doc.text(doc.splitTextToSize(r.my, 80), W / 2 - 45, 126, { align: 'center' });
+  font(18, 1, CR); doc.text(doc.splitTextToSize(r.opp, 80), W / 2 + 45, 126, { align: 'center' });
+  font(46, 1); doc.text(`${r.us} - ${r.them}`, W / 2, 170, { align: 'center' });
+  doc.setDrawColor(...NAVY); doc.setLineWidth(0.8); doc.line(W / 2 - 15, 180, W / 2 + 15, 180);
+  font(11, 0, GREY); doc.text(fmtDate(st.date), W / 2, 192, { align: 'center' });
+  font(8.5, 0, [148, 163, 184]); doc.text('Generado con CourtStats PRO', W / 2, 276, { align: 'center' });
+  // resumen
+  k.newPage(); sec('Resumen del partido');
+  const cw = (CW - 6) / 2, res = r.us > r.them ? 'VICTORIA' : r.us < r.them ? 'DERROTA' : 'EMPATE';
+  [[r.my, r.us, CU, cuS, M], [r.opp, r.them, CR, crS, M + cw + 6]].forEach(([n, sc, col, src, x], i) => {
+    doc.setFillColor(248, 250, 252); doc.setDrawColor(...col); doc.setLineWidth(0.5); doc.roundedRect(x, k.y, cw, 26, 2, 2, 'FD');
+    crest(src, n, x + 4, k.y + 5, 16, col); font(10, 1, col); doc.text(doc.splitTextToSize(n, cw - 52)[0], x + 24, k.y + 11);
+    if (i === 0) { font(8, 1, r.us > r.them ? GOOD : r.us < r.them ? BAD : GREY); doc.text(H1 ? 'PARCIAL' : res, x + 24, k.y + 17); }
+    font(26, 1); doc.text(String(sc), x + cw - 5, k.y + 18, { align: 'right' });
+  });
+  k.y += 32;
+  sub('Marcador por cuarto'); tbl(r.sections[1].head, r.sections[1].body);
+  sub('Indicadores clave'); ensure(48);
+  const tw = (CW - 8) / 3;
+  ['efg', 'ppi', '3p', 'ft', 'to', 'paint'].forEach((key, i) => {
+    const c = D.cmp.find(x => x.k === key), x = M + (i % 3) * (tw + 4), ty = k.y + Math.floor(i / 3) * 22;
+    doc.setFillColor(248, 250, 252); doc.roundedRect(x, ty, tw, 19, 1.5, 1.5, 'F');
+    font(7.5, 0, GREY); doc.text(c.l, x + 3, ty + 5);
+    doc.setFillColor(...({ good: GOOD, bad: BAD, even: GREY, none: [203, 213, 225] }[c.verdict])); doc.circle(x + tw - 4, ty + 4, 1.3, 'F');
+    font(13, 1, CU); doc.text(c.fu, x + 3, ty + 13.5); font(13, 1, CR); doc.text(c.fv, x + tw - 3, ty + 13.5, { align: 'right' });
+    font(6.5, 0, GREY); doc.text(r.my.slice(0, 14), x + 3, ty + 17.2); doc.text(r.opp.slice(0, 14), x + tw - 3, ty + 17.2, { align: 'right' });
+  });
+  k.y += 46;
+  sec('Claves del partido'); ensure(66);
+  D.keys.forEach((q, i) => {
+    const x = M + (i % 2) * (cw + 6), cy = k.y + Math.floor(i / 2) * 31, col = q.tone === 'good' ? GOOD : q.tone === 'bad' ? BAD : [217, 119, 6];
+    doc.setFillColor(248, 250, 252); doc.rect(x, cy, cw, 28, 'F'); doc.setFillColor(...col); doc.rect(x, cy, 1.4, 28, 'F');
+    font(7, 1, GREY); doc.text(`CLAVE ${i + 1}`, x + 4, cy + 4.5);
+    let ty = para(q.t, x + 4, cy + 9, cw - 8, 9.5, NAVY, true);
+    ty = para(q.d, x + 4, ty + 0.5, cw - 8, 8, GREY);
+    para('→ ' + q.a, x + 4, ty + 0.8, cw - 8, 8, col, true);
+  });
+  k.y += Math.ceil(D.keys.length / 2) * 31 + 3;
+  sub('Lectura rápida'); r.insights.forEach(t => { ensure(10); k.y = para('• ' + t, M + 1, k.y + 3, CW - 2, 8.5, NAVY) - 1.2; });
+  // cara a cara
+  ensure(112); sec('Cara a cara');
+  doc.setFillColor(...CU); doc.rect(M, k.y, 3, 3, 'F'); font(8.5, 1); doc.text(r.my, M + 5, k.y + 2.7); doc.setFillColor(...CR); doc.rect(M + 60, k.y, 3, 3, 'F'); doc.text(r.opp, M + 65, k.y + 2.7); k.y += 8;
+  D.cmp.forEach(c => {
+    ensure(13); font(8.5, 1); doc.text(c.l, M, k.y + 5.5);
+    const bx = M + 52, bw = 78, mx = Math.max(c.u, c.v, 1e-6);
+    doc.setFillColor(...CU); doc.rect(bx, k.y + 1, c.u / mx * bw, 3.2, 'F'); doc.setFillColor(...CR); doc.rect(bx, k.y + 5, c.v / mx * bw, 3.2, 'F');
+    font(8, 1, CU); doc.text(c.fu, bx + bw + 3, k.y + 3.9); font(8, 1, CR); doc.text(c.fv, bx + bw + 3, k.y + 7.9);
+    font(8.5, 1, { good: GOOD, bad: BAD, even: GREY, none: [148, 163, 184] }[c.verdict]); doc.text({ good: 'A favor', bad: 'En contra', even: 'Parejo', none: 'Sin datos' }[c.verdict], W - M, k.y + 5.5, { align: 'right' });
+    doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.2); doc.line(M, k.y + 10.5, W - M, k.y + 10.5); k.y += 12;
+  });
+  font(7.5, 0, GREY); k.y = para('"A favor" = ventaja de ' + r.my + ' en ese indicador. En pérdidas, menos es mejor.', M, k.y + 3, CW, 7.5, GREY) + 4;
+  // goleadores
+  sec('Goleadores y jugadores a seguir');
+  [[r.my, D.SU, r.sections[2], CU, true], [r.opp, D.SR, r.sections[3], CR, false]].forEach(([n, arr, s2, col, us]) => {
+    sub(n, col); tbl(s2.head, s2.body, null, col);
+    arr.slice(0, 3).forEach(({ p }) => {
+      const evs = D.ev.filter(e => (us ? ['SHOT', 'FT', 'TURNOVER'] : ['RIVAL_FG', 'RIVAL_FT', 'RIVAL_TO']).includes(e.type) && e.playerId === p.id), pr = profileOf(evs), tip = us ? '' : tipFor(pr);
+      ensure(16); font(8.5, 1, col); doc.text(`#${p.number} ${p.name}`, M, k.y + 3);
+      k.y = para(`Perfil: ${pr.join(' · ') || 'pocos datos'}${tip ? '. → ' + tip : ''}`, M + 2, k.y + 7, CW - 2, 8, GREY) + 2.5;
+    });
+    k.y += 3;
+  });
+  // tipos de ataque
+  ensure(120); sec('Tipos de ataque'); const A = r.sections[4];
+  tbl(A.head, A.body, null, NAVY, { styles: { fontSize: 7.5, cellPadding: 1.2, lineColor: [226, 232, 240], textColor: NAVY } });
+  k.y = para(A.note, M, k.y - 2, CW, 7.5, GREY) + 5;
+  sub('Puntos por intento (PPI) por momento'); const mxp = Math.max(1, ...D.PU.map(d => d.ppi), ...D.PR.map(d => d.ppi));
+  PHASES.forEach((ph, i) => {
+    ensure(13); font(8.5, 1); doc.text(ph, M, k.y + 5.5); const bx = M + 40, bw = 85, u = D.PU[i], v = D.PR[i];
+    doc.setFillColor(...CU); doc.rect(bx, k.y + 1, u.ppi / mxp * bw, 3.2, 'F'); doc.setFillColor(...CR); doc.rect(bx, k.y + 5, v.ppi / mxp * bw, 3.2, 'F');
+    font(8, 1, CU); doc.text(`${f1(u.ppi)} PPI · ${u.a} tiros · ${u.tot} pts`, bx + bw + 3, k.y + 3.9); font(8, 1, CR); doc.text(`${f1(v.ppi)} PPI · ${v.a} tiros · ${v.tot} pts`, bx + bw + 3, k.y + 7.9);
+    doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.2); doc.line(M, k.y + 10.5, W - M, k.y + 10.5); k.y += 12;
+  });
+  k.y += 3; sub('Qué dicen los datos'); r.insights.filter(t => /Ataque|ventaja/.test(t)).forEach(t => { ensure(10); k.y = para('• ' + t, M + 1, k.y + 3, CW - 2, 8.5, NAVY) - 1.2; });
+  // mapas
+  ensure(205); sec('Mapa de tiro'); const mw = (CW - 6) / 2, mh = mw * 0.94;
+  [[r.my, 'SHOT', CU, false, D.zs.us], [r.opp, 'RIVAL_FG', CR, true, D.zs.them]].forEach(([n, type, col, sq, z]) => {
+    const shots = D.ev.filter(e => e.type === type && e.x !== undefined); ensure(mh + 22);
+    font(9.5, 1, col); doc.text(`${n}: ${shots.filter(e => e.isMade).length}/${shots.length} tiros ubicados anotados`, M, k.y + 3); k.y += 6;
+    drawCourt(doc, M, k.y, mw, shots, sq); drawCourt(doc, M + mw + 6, k.y, mw, [], sq); drawChips(doc, M + mw + 6, k.y, mw, z);
+    para('Verde: anotado · Rojo: fallado', M, k.y + mh + 4, mw, 7, GREY); para('Zonas: % de acierto y anotados/intentos. Verde: 1,1 PPI o más · amarillo: 0,8 o más · rojo: menos de 0,8', M + mw + 6, k.y + mh + 4, mw, 7, GREY);
+    k.y += mh + 14;
+  });
+  // box score y análisis
+  ensure(110); sec('Box score');
+  sub(r.my, CU); tbl(r.sections[5].head, r.sections[5].body, r.sections[5].foot, CU); sub(r.opp, CR); tbl(r.sections[6].head, r.sections[6].body, r.sections[6].foot, CR);
+  sec('Análisis complementario');
+  [[7, 'eFG% por cuarto'], [8, 'Tiros libres: por jugada vs bonus'], [9, 'Pérdidas por situación']].forEach(([i, t]) => { sub(t); tbl(r.sections[i].head, r.sections[i].body, r.sections[i].foot); });
+  // FODA
+  ensure(135); sec('Lectura del partido (FODA)');
+  const bw2 = (CW - 6) / 2, F = D.foda;
+  [['FORTALEZAS · LO QUE FUNCIONÓ', F.F, [21, 128, 61], [240, 253, 244]], ['DEBILIDADES · LO QUE HAY QUE CUIDAR', F.D, [185, 28, 28], [254, 242, 242]],
+   ['OPORTUNIDADES · DÓNDE ATACAR', F.O, [29, 78, 216], [239, 246, 255]], ['AMENAZAS · QUÉ FRENAR', F.A, [180, 83, 9], [255, 251, 235]]].forEach(([t, items, col, bg], i) => {
+    const x = M + (i % 2) * (bw2 + 6), by = k.y + Math.floor(i / 2) * 60;
+    doc.setFillColor(...bg); doc.rect(x, by, bw2, 54, 'F'); doc.setFillColor(...col); doc.rect(x, by, bw2, 6.5, 'F'); font(8, 1, [255, 255, 255]); doc.text(t, x + 3, by + 4.5);
+    let ty = by + 11.5; (items.length ? items : ['Sin datos suficientes']).slice(0, 5).forEach(it => { ty = para('• ' + it, x + 3, ty, bw2 - 6, 8, NAVY) + 1.3; });
+  });
+  k.y += 124;
+  // historial
+  k.newPage(); sec('Anexo · Historial del partido'); tbl(r.histHead, r.history.length ? r.history : [['-', '-', '-', 'Sin eventos', '-', '-']]);
+  k.frame(r.my, cuS, CU, r.opp, crS, CR, `${r.us} - ${r.them}`, `CourtStats PRO · ${r.kind} · ${fmtDate(st.date)}`, 2);
+  await deliverFile(doc.output('blob'), exportName(st, 'pdf', H1 ? '_1T' : ''), 'application/pdf');
 }
+// ---------- PDF de jugadores (Equipos) ----------
+async function exportPlayersPDF(tid, onlyPid) {
+  const t = teams.find(x => x.id === tid); if (!t) return;
+  const J = window.jspdf;
+  if (!J || !J.jsPDF) { alert('No se pudo cargar la librería de PDF. Abrí la app con internet una vez y probá de nuevo.'); return; }
+  const doc = new J.jsPDF({ unit: 'mm', format: 'a4' }), k = pdfKit(doc), { W, M, CW, NAVY, CU, GREY, font, crest, sec, para, tbl, ensure } = k, src = safeCrest(t.crest);
+  const map = playerStatsMap(tid), gm = gamesForStats().filter(g => g.myTeamId === tid || g.oppTeamId === tid && true);
+  const rows = t.players.map(p => { const m = map[p.id], evs = m ? m.evs : []; return { p, evs, a: aggOf(evs), ph: phaseOf(evs), pj: m ? m.games.size : 0 }; });
+  const act = rows.filter(d => d.a.n > 0 && (!onlyPid || d.p.id === onlyPid));
+  if (!act.length) { alert('Todavía no hay estadísticas de este equipo. Vinculalo a un partido desde Partidos y cargá eventos.'); return; }
+  const dates = gm.map(g => g.date).filter(Boolean).sort();
+  if (!onlyPid) {
+    k.cover('INFORME DE JUGADORES', 'Estadísticas individuales acumuladas');
+    crest(src, t.name, W / 2 - 22, 82, 44, CU);
+    font(24, 1, CU); doc.text(doc.splitTextToSize(t.name, 150), W / 2, 144, { align: 'center' });
+    font(12, 0, GREY); doc.text(`${gm.length} partido(s) analizado(s)${dates.length ? ' · ' + fmtDate(dates[0]) + (dates.length > 1 ? ' a ' + fmtDate(dates[dates.length - 1]) : '') : ''}`, W / 2, 162, { align: 'center' });
+    font(10, 0, GREY); doc.text(`${act.length} jugador(es) con registros`, W / 2, 171, { align: 'center' });
+    font(8.5, 0, [148, 163, 184]); doc.text('Generado con CourtStats PRO · ' + fmtDate(today()), W / 2, 276, { align: 'center' });
+    k.newPage(); sec('Plantel · estadísticas acumuladas');
+    const tot = emptyAgg(); rows.forEach(d => addAgg(tot, d.a));
+    tbl(['Jugador', 'PJ', 'PTS', 'TC', '2P', '3P', 'TL', 'PPI', 'eFG%', 'PÉR'], rows.filter(d => d.a.n).map(d => [`#${d.p.number} ${d.p.name}`, d.pj, d.a.pts, `${d.a.fgm}/${d.a.fga}`, `${d.a.m2}/${d.a.a2}`, `${d.a.m3}/${d.a.a3}`, `${d.a.ftm}/${d.a.fta}`, ppiF(d.a.fgp, d.a.fga), efgF(d.a), d.a.to]),
+      ['TOTAL', '', tot.pts, `${tot.fgm}/${tot.fga}`, `${tot.m2}/${tot.a2}`, `${tot.m3}/${tot.a3}`, `${tot.ftm}/${tot.fta}`, ppiF(tot.fgp, tot.fga), efgF(tot), tot.to], CU);
+    sec('Puntos por momento de la ofensiva'); const tp = PHASES.map(() => ({ a: 0, m: 0, pts: 0 }));
+    rows.forEach(d => d.ph.forEach((x, i) => { tp[i].a += x.a; tp[i].m += x.m; tp[i].pts += x.pts; }));
+    tbl(['Jugador', ...PHASES], rows.filter(d => d.a.n).map(d => [`#${d.p.number} ${d.p.name}`, ...d.ph.map(x => x.a ? `${x.pts} (${x.m}/${x.a})` : '-')]), ['TOTAL', ...tp.map(x => x.a ? `${x.pts} (${x.m}/${x.a})` : '-')], NAVY);
+    k.y = para('Puntos de tiros de campo en cada momento, con aciertos/intentos entre paréntesis.', M, k.y - 2, CW, 7.5, GREY) + 5;
+    sec('Referentes'); const bullets = [], by = f => rows.filter(d => d.a.n).slice().sort(f)[0];
+    const top = by((x, y) => y.a.pts - x.a.pts); if (top) bullets.push(`Máximo anotador: #${top.p.number} ${top.p.name} (${top.a.pts} pts)`);
+    const eff = rows.filter(d => d.a.fga >= 5).sort((x, y) => efgN2(y.a) - efgN2(x.a))[0]; if (eff) bullets.push(`Más eficiente (5 o más tiros): #${eff.p.number} ${eff.p.name} (eFG% ${efgF(eff.a)})`);
+    const tov = by((x, y) => y.a.to - x.a.to); if (tov && tov.a.to) bullets.push(`Más pérdidas: #${tov.p.number} ${tov.p.name} (${tov.a.to})`);
+    bullets.forEach(b => { ensure(8); k.y = para('• ' + b, M + 1, k.y + 3, CW - 2, 9, NAVY) - 1; });
+  }
+  const BH = 128;
+  act.forEach((d, i) => {
+    if (!onlyPid && i % 2 === 0) k.newPage(); else if (onlyPid) k.y = 22;
+    const by = onlyPid ? 22 : 22 + (i % 2) * BH;
+    doc.setFillColor(...NAVY); doc.rect(M, by, CW, 9, 'F'); font(11, 1, [255, 255, 255]); doc.text(`#${d.p.number}  ${d.p.name}`, M + 3, by + 6.2);
+    font(8, 0, [203, 213, 225]); doc.text(`${d.pj} partido(s) · ${t.name}`, W - M - 3, by + 6, { align: 'right' });
+    const kp = [['PTS', d.a.pts], ['TC', `${d.a.fgm}/${d.a.fga}`], ['eFG%', efgF(d.a)], ['PPI', ppiF(d.a.fgp, d.a.fga)], ['TL', `${d.a.ftm}/${d.a.fta}`], ['PÉR', d.a.to]], kw = (CW - 10) / 6;
+    kp.forEach(([l, v], j) => { const x = M + j * (kw + 2); doc.setFillColor(248, 250, 252); doc.roundedRect(x, by + 12, kw, 14, 1.5, 1.5, 'F'); font(7, 0, GREY); doc.text(l, x + kw / 2, by + 16.5, { align: 'center' }); font(12, 1); doc.text(String(v), x + kw / 2, by + 23.2, { align: 'center' }); });
+    doc.autoTable({ startY: by + 30, head: [['Momento', 'Int.', 'Acier.', 'Pts', 'PPI', 'TL']], body: PHASES.map((ph, j) => { const x = d.ph[j]; return [ph, x.a, x.m, x.pts, x.a ? f1(x.ppi) : '-', x.fa ? `${x.fm}/${x.fa}` : '-']; }),
+      theme: 'grid', styles: { fontSize: 7.5, cellPadding: 1.1, lineColor: [226, 232, 240], textColor: NAVY }, headStyles: { fillColor: NAVY, textColor: 255 }, margin: { top: 22, left: M, right: W - (M + 94) }, tableWidth: 94 });
+    let ty = doc.lastAutoTable.finalY + 5; font(8.5, 1); doc.text('Cómo anota', M, ty);
+    const p2 = d.a.m2 * 2, p3 = d.a.m3 * 3, pl = d.a.ftm, pt = Math.max(1, d.a.pts), pr = profileOf(d.evs);
+    ty = para(`Puntos: ${p2} de 2 (${Math.round(p2 / pt * 100)}%), ${p3} de 3 (${Math.round(p3 / pt * 100)}%) y ${pl} de tiros libres (${Math.round(pl / pt * 100)}%).`, M, ty + 4.5, 94, 8, GREY);
+    para(`Perfil: ${pr.join(' · ') || 'pocos datos'}.`, M, ty + 1.5, 94, 8, GREY);
+    const shots = d.evs.filter(e => (e.type === 'SHOT' || e.type === 'RIVAL_FG') && e.x !== undefined), mx = M + 100, mw = CW - 100, z = zoneStats(shots);
+    font(8.5, 1); doc.text(`Mapa de tiro · ${shots.filter(e => e.isMade).length}/${shots.length} anotados`, mx, by + 31);
+    drawCourt(doc, mx, by + 34, mw, shots, false, 1.1); drawChips(doc, mx, by + 34, mw, z);
+    font(6.5, 0, GREY); doc.text('Puntos verdes: anotados · rojos: fallados · recuadros: acierto por zona', mx, by + 34 + mw * 0.94 + 3.5);
+  });
+  k.frame(t.name, src, CU, '', '', CU, onlyPid ? 'Informe del jugador' : 'Informe de jugadores', `CourtStats PRO · ${t.name}`, onlyPid ? 1 : 2);
+  const who = onlyPid ? (act[0].p.name || 'jugador') : 'jugadores';
+  await deliverFile(doc.output('blob'), `${who}_${t.name}_${today()}.pdf`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.-]+/g, '_'), 'application/pdf');
+}
+const efgN2 = a => a.fga ? (a.fgm + 0.5 * a.m3) / a.fga : 0;
 
 // ---------- Versión, migraciones y respaldo ----------
 // Al publicar una mejora: subir APP_VERSION aquí y VERSION en sw.js.
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.7.0';
 // SCHEMA: versión del formato de los datos guardados. Si un cambio futuro altera ese formato,
 // se sube SCHEMA y se agrega en MIGRATIONS[n] una función que convierte los datos viejos.
 const SCHEMA = 1, LS_SCHEMA = 'courtstats_schema', LS_BACKUP = 'courtstats_lastbackup';
@@ -1231,7 +1482,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!Array.isArray(S.events)) S.events = [];
   if (!Array.isArray(S.onCourt) || S.onCourt.length !== 5) S.onCourt = S.players.slice(0, 5).map(p => p.id);
   populatePlayerSelect(); initCharts(); switchTab('court'); updateUI();
-  $('inp-my').value = S.myTeam || ''; $('inp-opp').value = S.opp || ''; $('inp-date').value = S.date || today();
+  $('inp-my').value = S.myTeam || ''; $('inp-opp').value = S.opp || ''; $('inp-date').value = S.date || today(); $('inp-comp').value = S.comp || '';
   setStatus(true, S.events.length ? 'Partido restaurado' : 'Listo');
 });
 </script>
